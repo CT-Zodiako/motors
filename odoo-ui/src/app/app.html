@@ -1,0 +1,22 @@
+<p-toast />
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <i class="pi pi-link"></i>
+      Odoo Bridge
+    </div>
+    @for (item of nav; track item.id) {
+      <button class="nav-item" [class.active]="activeTab() === item.id" (click)="setTab(item.id)">
+        <i class="pi {{ item.icon }}"></i>
+        {{ item.label }}
+      </button>
+    }
+  </aside>
+
+  <main class="content">
+    @if (activeTab() === 'list')   { <app-query-list /> }
+    @if (activeTab() === 'create') { <app-query-create /> }
+    @if (activeTab() === 'runner') { <app-query-runner /> }
+  </main>
+</div>

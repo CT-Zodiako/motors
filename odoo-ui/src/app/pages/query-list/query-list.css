@@ -1,0 +1,4 @@
+.table-caption { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.desc { color: #6e6e73; max-width: 220px; }
+code { background: #f2f2f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.empty-msg { text-align: center; color: #6e6e73; padding: 32px !important; }

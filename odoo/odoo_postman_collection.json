@@ -1,0 +1,170 @@
+{
+  "info": {
+    "name": "Odoo Motorreductores",
+    "_postman_id": "odoo-motorreductores-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://motorreductores.odoo.com"
+    },
+    {
+      "key": "db",
+      "value": "progsum-odoo-motorreductores-main-25806330"
+    },
+    {
+      "key": "login",
+      "value": "proyectos@motorreductores.com.co"
+    },
+    {
+      "key": "password",
+      "value": "TU_PASSWORD_AQUI"
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authenticate",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "var res = pm.response.json();",
+              "if (res.result && res.result.session_id) {",
+              "  pm.collectionVariables.set(\"session_id\", res.result.session_id);",
+              "  console.log(\"Session saved:\", res.result.session_id);",
+              "} else {",
+              "  console.error(\"Auth failed\", JSON.stringify(res));",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"db\": \"{{db}}\",\n    \"login\": \"{{login}}\",\n    \"password\": \"{{password}}\"\n  }\n}"
+        },
+        "url": "{{base_url}}/web/session/authenticate"
+      }
+    },
+    {
+      "name": "2. Clientes (res.partner)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session_id={{session_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"model\": \"res.partner\",\n    \"method\": \"search_read\",\n    \"args\": [\n      [\n        [\n          \"customer_rank\",\n          \">\",\n          0\n        ]\n      ]\n    ],\n    \"kwargs\": {\n      \"fields\": [\n        \"name\",\n        \"email\",\n        \"phone\",\n        \"city\"\n      ],\n      \"limit\": 20\n    }\n  }\n}"
+        },
+        "url": "{{base_url}}/web/dataset/call_kw"
+      }
+    },
+    {
+      "name": "3. Productos (product.template)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session_id={{session_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"model\": \"product.template\",\n    \"method\": \"search_read\",\n    \"args\": [\n      []\n    ],\n    \"kwargs\": {\n      \"fields\": [\n        \"name\",\n        \"list_price\",\n        \"type\",\n        \"categ_id\"\n      ],\n      \"limit\": 20\n    }\n  }\n}"
+        },
+        "url": "{{base_url}}/web/dataset/call_kw"
+      }
+    },
+    {
+      "name": "4. Ordenes de Venta (sale.order)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session_id={{session_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"model\": \"sale.order\",\n    \"method\": \"search_read\",\n    \"args\": [\n      []\n    ],\n    \"kwargs\": {\n      \"fields\": [\n        \"name\",\n        \"partner_id\",\n        \"amount_total\",\n        \"state\",\n        \"date_order\"\n      ],\n      \"limit\": 20\n    }\n  }\n}"
+        },
+        "url": "{{base_url}}/web/dataset/call_kw"
+      }
+    },
+    {
+      "name": "5. Facturas (account.move)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session_id={{session_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"model\": \"account.move\",\n    \"method\": \"search_read\",\n    \"args\": [\n      [\n        [\n          \"move_type\",\n          \"=\",\n          \"out_invoice\"\n        ]\n      ]\n    ],\n    \"kwargs\": {\n      \"fields\": [\n        \"name\",\n        \"partner_id\",\n        \"amount_total\",\n        \"state\",\n        \"invoice_date\"\n      ],\n      \"limit\": 20\n    }\n  }\n}"
+        },
+        "url": "{{base_url}}/web/dataset/call_kw"
+      }
+    },
+    {
+      "name": "6. Campos de un modelo (ver estructura)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cookie",
+            "value": "session_id={{session_id}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"model\": \"sale.order\",\n    \"method\": \"fields_get\",\n    \"args\": [],\n    \"kwargs\": {\n      \"attributes\": [\n        \"string\",\n        \"type\",\n        \"required\"\n      ]\n    }\n  }\n}"
+        },
+        "url": "{{base_url}}/web/dataset/call_kw"
+      }
+    }
+  ]
+}

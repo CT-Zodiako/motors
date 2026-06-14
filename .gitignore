@@ -1,0 +1,23 @@
+# Local Pi runtime state
+.atl/
+
+# OS/editor files
+.DS_Store
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node/frontend
+node_modules/
+dist/
+build/
+.next/

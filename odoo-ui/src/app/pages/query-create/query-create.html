@@ -1,0 +1,262 @@
+<div class="page">
+  <div class="page-header">
+    <h1>Nuevo Query</h1>
+  </div>
+
+  <p-stepper [value]="activeStep()" styleClass="custom-stepper">
+
+    <!-- PASO 1: MODELO -->
+    <p-step-panel [value]="0" header="Modelo">
+      <ng-template #content>
+        <div class="step-content">
+          <p class="hint">Elegí una de las áreas comunes o buscá cualquier módulo de tu Odoo.</p>
+
+          <p class="section-label">Más usados</p>
+          <div class="model-grid">
+            @for (m of pinnedModels; track m.model) {
+              <button class="model-card" [class.selected]="selectedModel()?.model === m.model" (click)="selectModel(m)">
+                <span class="model-icon">{{ m.icon }}</span>
+                <span class="model-label">{{ m.label }}</span>
+                <span class="model-desc">{{ m.description }}</span>
+              </button>
+            }
+          </div>
+
+          <p class="section-label">
+            Todos los módulos
+            @if (loadingModels()) { <span class="muted-inline">— cargando...</span> }
+            @else { <span class="muted-inline">— {{ allModels().length }} disponibles</span> }
+          </p>
+
+          <input
+            pInputText
+            class="w-full"
+            placeholder="Buscar por nombre o código técnico..."
+            [ngModel]="modelSearch()"
+            (ngModelChange)="modelSearch.set($event)"
+            name="modelSearch"
+          />
+
+          @if (modelSearch().length > 0 && !loadingModels()) {
+            <div class="model-results">
+              @if (filteredModels().length === 0) {
+                <p class="muted">Sin resultados para "{{ modelSearch() }}".</p>
+              } @else {
+                @for (m of filteredModels(); track m.model) {
+                  <button class="model-row" (click)="selectModel(m)">
+                    <span>🗂️</span>
+                    <span class="model-row-name">{{ m.name }}</span>
+                    <code class="model-row-code">{{ m.model }}</code>
+                  </button>
+                }
+              }
+            </div>
+          }
+        </div>
+      </ng-template>
+    </p-step-panel>
+
+    <!-- PASO 2: CAMPOS -->
+    <p-step-panel [value]="1" header="Campos">
+      <ng-template #content>
+        <div class="step-content">
+          <div class="step-header">
+            <p class="hint">Seleccioná los datos que va a mostrar esta consulta.</p>
+            <p-button label="← Cambiar modelo" [text]="true" size="small" (onClick)="goTo(0)" />
+          </div>
+
+          @if (loadingFields()) {
+            <div class="skeletons">
+              @for (i of [1,2,3,4,5,6]; track i) { <p-skeleton height="52px" borderRadius="10px" /> }
+            </div>
+          } @else if (fieldsError()) {
+            <p class="error-msg">{{ fieldsError() }}</p>
+          } @else {
+            <div class="fields-toolbar">
+              <input
+                pInputText
+                placeholder="Buscar campo..."
+                [ngModel]="fieldSearch()"
+                (ngModelChange)="fieldSearch.set($event)"
+                name="fieldSearch"
+                class="field-search"
+              />
+              <span class="muted">{{ checkedFields().size }} / {{ availableFields().length }} seleccionados</span>
+              <p-button [label]="allFieldsChecked() ? 'Deseleccionar' : 'Seleccionar visibles'" [text]="true" size="small" (onClick)="toggleAllFields()" />
+            </div>
+
+            <div class="fields-grid">
+              @for (f of filteredFields(); track f.key) {
+                <div class="field-card" [class.checked]="isFieldChecked(f.key)" (click)="toggleField(f.key)">
+                  <div class="field-info">
+                    <span class="field-label">{{ f.string }}</span>
+                    <span class="field-type">{{ f.type }}</span>
+                  </div>
+                  @if (isFieldChecked(f.key)) {
+                    <i class="pi pi-check field-check-icon"></i>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="step-actions">
+              <p-button label="Continuar →" [disabled]="checkedFields().size === 0" (onClick)="goTo(2)" />
+            </div>
+          }
+        </div>
+      </ng-template>
+    </p-step-panel>
+
+    <!-- PASO 3: FILTROS -->
+    <p-step-panel [value]="2" header="Filtros">
+      <ng-template #content>
+        <div class="step-content">
+          <div class="step-header">
+            <p class="hint">Opcional. Sin filtros se traen todos los registros.</p>
+            <p-button label="← Volver" [text]="true" size="small" (onClick)="goTo(1)" />
+          </div>
+
+          <div class="filters-list">
+            @for (f of filters(); track $index; let i = $index) {
+              @if (i > 0) {
+                <div class="filter-connector">Y</div>
+              }
+              <div class="filter-row">
+                <p-select
+                  [options]="availableFields()"
+                  [ngModel]="f.field"
+                  (ngModelChange)="onFieldChange(i, $event)"
+                  optionLabel="string"
+                  optionValue="key"
+                  [filter]="true"
+                  filterBy="string,key"
+                  placeholder="Campo..."
+                  styleClass="filter-select"
+                >
+                  <ng-template #selectedItem let-field>
+                    <div class="filter-field-item">
+                      <span>{{ field.string }}</span>
+                      <span class="type-badge">{{ field.type }}</span>
+                    </div>
+                  </ng-template>
+                  <ng-template #item let-field>
+                    <div class="filter-field-item">
+                      <span>{{ field.string }}</span>
+                      <span class="type-badge">{{ field.type }}</span>
+                    </div>
+                  </ng-template>
+                </p-select>
+
+                <p-select
+                  [options]="operatorsFor(f.field)"
+                  [ngModel]="f.operator"
+                  (ngModelChange)="onOperatorChange(i, $event)"
+                  optionLabel="label"
+                  optionValue="value"
+                  styleClass="filter-op"
+                />
+
+                @switch (valueInputKind(f)) {
+                  @case ('bool') {
+                    <p-select
+                      [options]="boolOptions"
+                      [ngModel]="f.value"
+                      (ngModelChange)="updateFilter(i, { value: $event })"
+                      optionLabel="label"
+                      optionValue="value"
+                      placeholder="Elegir..."
+                      styleClass="filter-val"
+                    />
+                  }
+                  @case ('number') {
+                    <p-inputnumber
+                      [ngModel]="$any(f.value)"
+                      (ngModelChange)="updateFilter(i, { value: $event })"
+                      [useGrouping]="false"
+                      styleClass="filter-val"
+                    />
+                  }
+                  @case ('date') {
+                    <input
+                      type="date"
+                      class="filter-val filter-date"
+                      [ngModel]="$any(f.value)"
+                      (ngModelChange)="updateFilter(i, { value: $event })"
+                    />
+                  }
+                  @case ('datetime') {
+                    <input
+                      type="datetime-local"
+                      class="filter-val filter-date"
+                      [ngModel]="$any(f.value)"
+                      (ngModelChange)="updateFilter(i, { value: $event })"
+                    />
+                  }
+                  @default {
+                    <input
+                      pInputText
+                      class="filter-val"
+                      [ngModel]="$any(f.value)"
+                      (ngModelChange)="updateFilter(i, { value: $event })"
+                      [placeholder]="getFieldType(f.field) === 'many2one' ? 'Nombre a buscar...' : 'Valor...'"
+                    />
+                  }
+                }
+
+                <p-button icon="pi pi-times" severity="danger" [text]="true" (onClick)="removeFilter(i)" />
+              </div>
+            }
+
+            @if (filters().length === 0) {
+              <div class="filters-empty">
+                <i class="pi pi-filter-slash"></i>
+                <span>Sin filtros — se traen todos los registros.</span>
+              </div>
+            }
+
+            <p-button label="+ Agregar filtro" [outlined]="true" severity="secondary" (onClick)="addFilter()" />
+          </div>
+
+          <div class="step-actions">
+            <p-button label="Continuar →" (onClick)="goTo(3)" />
+          </div>
+        </div>
+      </ng-template>
+    </p-step-panel>
+
+    <!-- PASO 4: GUARDAR -->
+    <p-step-panel [value]="3" header="Guardar">
+      <ng-template #content>
+        <div class="step-content">
+          <div class="step-header">
+            <p class="hint">Dale un nombre a esta consulta para identificarla.</p>
+            <p-button label="← Volver" [text]="true" size="small" (onClick)="goTo(2)" />
+          </div>
+
+          <div class="summary">
+            <div class="summary-row"><span class="summary-label">Modelo</span><span>{{ selectedModel()?.label }}</span></div>
+            <div class="summary-row"><span class="summary-label">Campos</span><span>{{ checkedFieldsList().map(f => f.string).join(', ') }}</span></div>
+            <div class="summary-row"><span class="summary-label">Filtros</span><span>{{ filters().length === 0 ? 'Sin filtros' : filters().length + ' filtro(s)' }}</span></div>
+          </div>
+
+          <div class="save-form">
+            <div class="field-group">
+              <label>Nombre de la consulta</label>
+              <input pInputText [ngModel]="queryName()" (ngModelChange)="queryName.set($event)" [placeholder]="autoName()" class="input-name" />
+              <small>Solo letras minúsculas, números y guión bajo. Ej: clientes_activos</small>
+            </div>
+            <p-button
+              label="Crear consulta"
+              icon="pi pi-check"
+              [loading]="saving()"
+              [disabled]="!queryName()"
+              (onClick)="save()"
+              size="large"
+            />
+          </div>
+        </div>
+      </ng-template>
+    </p-step-panel>
+
+  </p-stepper>
+</div>
