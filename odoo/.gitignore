@@ -5,3 +5,6 @@
 .env
 __pycache__/
 *.pyc
+bigquery.txt
+explore_bigquery.py
+inspect_bigquery_table.py

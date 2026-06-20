@@ -9,6 +9,7 @@ Las consultas a Odoo son controladas — solo se ejecutan las que están registr
 - **PostgreSQL 17** (Docker)
 - **psycopg2** para conexión a Postgres
 - **openpyxl** para exportación a Excel
+- **google-cloud-bigquery** para sincronización con BigQuery
 
 ## Requisitos previos
 
@@ -79,7 +80,18 @@ PG_PORT=5432
 PG_DB=odoo_db
 PG_USER=postgres
 PG_PASSWORD=123456
+
+# BigQuery (opcional)
+GOOGLE_APPLICATION_CREDENTIALS=/ruta/absoluta/a/service-account.json
 ```
+
+## Configuración de BigQuery
+
+El sync requiere una cuenta de servicio de Google Cloud con permisos de lectura sobre los datasets/tables deseados. Recomendado:
+
+1. Crear o descargar la clave JSON de la cuenta de servicio.
+2. Configurar la variable de entorno `GOOGLE_APPLICATION_CREDENTIALS` apuntando a la clave **fuera del repositorio**.
+3. Si no se define la variable, el sistema busca `odoo/bigquery.txt`, que está agregado a `.gitignore` para evitar commits accidentales.
 
 ---
 
@@ -109,6 +121,9 @@ Documentación interactiva: `http://localhost:8000/docs`
 | `GET` | `/export/sql/{name}?target=postgres\|oracle` | Exporta a SQL con CREATE TABLE |
 | `GET` | `/explore/models` | Lista todos los modelos de Odoo |
 | `GET` | `/explore/fields/{model}` | Lista los campos de un modelo |
+| `GET` | `/bigquery/datasets` | Lista los datasets accesibles en BigQuery |
+| `GET` | `/bigquery/tables/{dataset_id}` | Lista las tablas de un dataset |
+| `POST` | `/bigquery/sync/{dataset_id}/{table_id}` | Sincroniza una tabla de BigQuery a PostgreSQL |
 
 ### Parámetro opcional de columnas en exports
 

@@ -1,0 +1,66 @@
+<div class="header">
+  <h2>BigQuery Sync</h2>
+  <p-button
+    icon="pi pi-refresh"
+    label="Recargar"
+    (onClick)="loadDatasets()"
+    [loading]="datasetsLoading()"
+    outlined
+  />
+</div>
+
+<div class="dataset-selector">
+  <label for="dataset">Dataset</label>
+  <p-select
+    id="dataset"
+    [options]="datasets()"
+    [(ngModel)]="selectedDataset"
+    optionLabel="id"
+    optionValue="id"
+    placeholder="Seleccionar dataset"
+    (onChange)="onDatasetChange($event.value)"
+    [loading]="datasetsLoading()"
+    styleClass="w-64"
+  />
+</div>
+
+@if (tablesLoading()) {
+  <p-skeleton width="100%" height="200px" />
+} @else if (selectedDataset() != null && tables().length === 0) {
+  <div class="empty-state">No se encontraron tablas en este dataset.</div>
+} @else if (tables().length > 0) {
+  <p-table [value]="tables()" [paginator]="true" [rows]="10" [showCurrentPageReport]="true">
+    <ng-template pTemplate="header">
+      <tr>
+        <th>Tabla</th>
+        <th>Filas</th>
+        <th>Tamaño (bytes)</th>
+        <th>Columnas</th>
+        <th style="width: 8rem">Acción</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-table>
+      <tr>
+        <td>{{ table.id }}</td>
+        <td>{{ table.rows | number }}</td>
+        <td>{{ table.bytes | number }}</td>
+        <td>
+          <div class="columns-list">
+            @for (col of table.columns; track col.name) {
+              <span class="column-badge">{{ col.name }}: {{ col.type }}</span>
+            }
+          </div>
+        </td>
+        <td>
+          <p-button
+            icon="pi pi-sync"
+            label="Sync"
+            size="small"
+            (onClick)="syncTable(table)"
+            [loading]="syncingTable() === table.id"
+          />
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+}

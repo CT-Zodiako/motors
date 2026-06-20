@@ -1,0 +1,56 @@
+:host { display: block; }
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: var(--p-text-color);
+}
+
+.dataset-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.dataset-selector label {
+  font-weight: 600;
+  color: var(--p-text-muted-color);
+}
+
+.table-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+}
+
+.columns-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.column-badge {
+  background: var(--p-surface-100);
+  color: var(--p-text-color);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+.empty-state {
+  padding: 2rem;
+  text-align: center;
+  color: var(--p-text-muted-color);
+}

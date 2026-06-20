@@ -15,8 +15,9 @@
   </aside>
 
   <main class="content">
-    @if (activeTab() === 'list')   { <app-query-list /> }
-    @if (activeTab() === 'create') { <app-query-create /> }
-    @if (activeTab() === 'runner') { <app-query-runner /> }
+    @if (activeTab() === 'list')     { <app-query-list /> }
+    @if (activeTab() === 'create')   { <app-query-create /> }
+    @if (activeTab() === 'runner')   { <app-query-runner /> }
+    @if (activeTab() === 'bigquery') { <app-bigquery-sync /> }
   </main>
 </div>
