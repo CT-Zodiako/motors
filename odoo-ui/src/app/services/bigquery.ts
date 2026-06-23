@@ -33,6 +33,12 @@ export interface BigQuerySyncResponse {
   message: string;
 }
 
+export interface BigQueryUploadResponse {
+  dataset_id: string;
+  table_id: string;
+  rows_loaded: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BigQueryService {
   private base = 'http://localhost:8000';
@@ -51,6 +57,17 @@ export class BigQueryService {
     return this.http.post<BigQuerySyncResponse>(
       `${this.base}/bigquery/sync/${datasetId}/${tableId}`,
       {}
+    );
+  }
+
+  uploadToBigQuery(
+    datasetId: string,
+    tableId: string,
+    rows: Record<string, unknown>[]
+  ): Observable<BigQueryUploadResponse> {
+    return this.http.post<BigQueryUploadResponse>(
+      `${this.base}/bigquery/upload/${datasetId}/${tableId}`,
+      { rows }
     );
   }
 }

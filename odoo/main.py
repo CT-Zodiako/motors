@@ -4,9 +4,16 @@ from routers import catalog, runner, explorer, export, bigquery
 
 app = FastAPI(title="Odoo Bridge API", version="1.0.0")
 
+import os
+
+allowed_origins = ["http://localhost:4200"]
+ngrok_origin = os.getenv("NGROK_FRONTEND_URL")
+if ngrok_origin:
+    allowed_origins.append(ngrok_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

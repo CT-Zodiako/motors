@@ -57,6 +57,14 @@ export class OdooQueriesService {
     return this.http.get<QueryResult>(`${this.base}/run/${name}`);
   }
 
+  generateInsertPreview(
+    table: string,
+    columns: string[],
+    rows: Record<string, unknown>[],
+  ): Observable<{ sql: string }> {
+    return this.http.post<{ sql: string }>(`${this.base}/export/sql-preview`, { table, columns, rows });
+  }
+
   getFields(model: string): Observable<{ model: string; fields: Record<string, { string: string; type: string }> }> {
     return this.http.get<{ model: string; fields: Record<string, { string: string; type: string }> }>(
       `${this.base}/explore/fields/${model}`

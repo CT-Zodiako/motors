@@ -35,6 +35,19 @@
       [disabled]="!selected()"
       (onClick)="run()"
     />
+    <p-button
+      label="Enviar a BigQuery"
+      icon="pi pi-cloud-upload"
+      [loading]="bigQuerySubmitting()"
+      [disabled]="!selected() || !result() || activeColumns().length === 0 || running()"
+      (onClick)="openBigQueryDialog()"
+    />
+    <p-button
+      label="Generar INSERT"
+      icon="pi pi-code"
+      [disabled]="!selected() || !result() || activeColumns().length === 0 || running()"
+      (onClick)="openInsertDialog()"
+    />
   </div>
 
   @if (result()) {
@@ -53,6 +66,110 @@
         (onClick)="download('csv')"
       />
     </div>
+
+    <p-dialog
+      [(visible)]="insertDialogVisible"
+      header="Generar INSERT"
+      [modal]="true"
+      [closable]="!insertLoading()"
+      [dismissableMask]="!insertLoading()"
+      styleClass="insert-dialog"
+    >
+      <div class="insert-form">
+        <div class="insert-field">
+          <label for="insertTableName">Nombre de la tabla destino</label>
+          <input
+            id="insertTableName"
+            pInputText
+            type="text"
+            [(ngModel)]="insertTableName"
+            placeholder="my_table"
+            class="insert-input"
+          />
+        </div>
+
+        @if (generatedSql()) {
+          <textarea class="insert-sql" [value]="generatedSql()" readonly></textarea>
+        }
+      </div>
+
+      <ng-template #footer>
+        <p-button
+          label="Cerrar"
+          [text]="true"
+          [disabled]="insertLoading()"
+          (onClick)="closeInsertDialog()"
+        />
+        <p-button
+          label="Copiar"
+          icon="pi pi-copy"
+          [disabled]="!generatedSql()"
+          (onClick)="copySql()"
+        />
+        <p-button
+          label="Generar"
+          icon="pi pi-cog"
+          [loading]="insertLoading()"
+          [disabled]="!insertTableName().trim() || activeColumns().length === 0"
+          (onClick)="generateInsert()"
+        />
+      </ng-template>
+    </p-dialog>
+
+    <p-dialog
+      [(visible)]="bigQueryDialogVisible"
+      header="Exportar a BigQuery"
+      [modal]="true"
+      [closable]="!bigQuerySubmitting()"
+      [dismissableMask]="!bigQuerySubmitting()"
+      styleClass="bq-dialog"
+    >
+      <div class="bq-form">
+        @if (bigQueryLoading()) {
+          <div class="bq-loading">
+            <p-progressspinner ariaLabel="cargando" [style]="{ width: '32px', height: '32px' }" />
+          </div>
+        }
+
+        <p-select
+          [options]="bigQueryDatasets()"
+          [(ngModel)]="selectedBigQueryDataset"
+          optionLabel="id"
+          [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+          placeholder="Seleccioná un dataset..."
+          styleClass="bq-select"
+        />
+
+        <div class="bq-field">
+          <label for="bigQueryTableName">Nombre de la tabla</label>
+          <input
+            id="bigQueryTableName"
+            pInputText
+            type="text"
+            [(ngModel)]="bigQueryTableName"
+            placeholder="my_table"
+            [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+            class="bq-input"
+          />
+        </div>
+      </div>
+
+      <ng-template #footer>
+        <p-button
+          label="Cancelar"
+          [text]="true"
+          [disabled]="bigQuerySubmitting()"
+          (onClick)="closeBigQueryDialog()"
+        />
+        <p-button
+          label="Confirmar"
+          icon="pi pi-check"
+          [loading]="bigQuerySubmitting()"
+          [disabled]="!selectedBigQueryDataset() || !bigQueryTableName().trim() || bigQueryLoading() || activeColumns().length === 0"
+          (onClick)="confirmBigQueryUpload()"
+        />
+      </ng-template>
+    </p-dialog>
 
     <div class="col-selector">
       <div class="col-selector-header">

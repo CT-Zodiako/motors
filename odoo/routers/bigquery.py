@@ -1,8 +1,14 @@
 import re
+from datetime import date, datetime
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from psycopg2 import sql
 from psycopg2.extras import execute_values
+from google.cloud.bigquery import LoadJobConfig, SchemaField, WriteDisposition
+
+MAX_UPLOAD_ROWS = 100_000
 
 import db
 from bigquery_client import get_bigquery_client
@@ -93,6 +99,140 @@ class SyncResponse(BaseModel):
     synced: str
     rows: int
     message: str
+
+
+class BigQueryUploadPayload(BaseModel):
+    rows: list[dict[str, Any]]
+
+
+class BigQueryUploadResponse(BaseModel):
+    dataset_id: str
+    table_id: str
+    rows_loaded: int
+
+
+# BigQuery type ranking for promotion. Higher index = more permissive.
+_BQ_TYPE_RANK = {
+    "BOOLEAN": 0,
+    "INTEGER": 1,
+    "FLOAT": 2,
+    "NUMERIC": 3,
+    "BIGNUMERIC": 4,
+    "TIMESTAMP": 5,
+    "DATE": 6,
+    "TIME": 7,
+    "DATETIME": 8,
+    "STRING": 9,
+}
+
+
+def _promote_bq_type(a: str, b: str) -> str:
+    """Return the more permissive of two BigQuery types."""
+    return a if _BQ_TYPE_RANK.get(a, 0) >= _BQ_TYPE_RANK.get(b, 0) else b
+
+
+def _infer_bq_schema(rows: list[dict[str, Any]]) -> list[SchemaField]:
+    if not rows:
+        return []
+    sample = rows[0]
+    schema = []
+    for key in sample.keys():
+        _validate_identifier(key, "column")
+        field_type = _infer_column_type(key, rows)
+        schema.append(SchemaField(key, field_type))
+    return schema
+
+
+def _infer_column_type(key: str, rows: list[dict[str, Any]]) -> str:
+    """Infer a BigQuery type by scanning all non-None values in a column."""
+    inferred = "STRING"  # default when all values are None
+    for row in rows:
+        value = row.get(key)
+        if value is None:
+            continue
+        value_type = _infer_field_type(value)
+        inferred = _promote_bq_type(inferred, value_type)
+        # STRING is the most permissive; no need to keep scanning.
+        if inferred == "STRING":
+            break
+    return inferred
+
+
+def _infer_field_type(value: Any) -> str:
+    if value is None:
+        return "STRING"
+    if isinstance(value, bool):
+        return "BOOLEAN"
+    if isinstance(value, int):
+        return "INTEGER"
+    if isinstance(value, float):
+        return "FLOAT"
+    if isinstance(value, str):
+        return _infer_string_type(value)
+    if isinstance(value, datetime):
+        return "TIMESTAMP"
+    if isinstance(value, date):
+        return "DATE"
+    return "STRING"
+
+
+def _infer_string_type(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        return "STRING"
+    # ISO 8601 timestamp with optional timezone, e.g. 2024-01-01T12:00:00 or 2024-01-01T12:00:00Z
+    if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$", stripped):
+        return "TIMESTAMP"
+    # ISO 8601 date, e.g. 2024-01-01
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", stripped):
+        return "DATE"
+    # Numeric strings: prefer INTEGER only if no decimal point or exponent.
+    if re.match(r"^-?\d+$", stripped):
+        return "INTEGER"
+    if re.match(r"^-?\d+\.\d+([eE][+-]?\d+)?$", stripped) or re.match(r"^-?\d+[eE][+-]?\d+$", stripped):
+        return "FLOAT"
+    return "STRING"
+
+
+@router.post("/upload/{dataset_id}/{table_id}", response_model=BigQueryUploadResponse)
+def upload_to_bigquery(dataset_id: str, table_id: str, payload: BigQueryUploadPayload):
+    _validate_identifier(dataset_id, "dataset")
+    _validate_identifier(table_id, "table")
+
+    if not payload.rows:
+        raise HTTPException(status_code=400, detail="No rows provided")
+    if len(payload.rows) > MAX_UPLOAD_ROWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Payload exceeds maximum of {MAX_UPLOAD_ROWS} rows",
+        )
+
+    client = get_bigquery_client()
+    table_ref = f"{client.project}.{dataset_id}.{table_id}"
+
+    schema = _infer_bq_schema(payload.rows)
+    if not schema:
+        raise HTTPException(status_code=400, detail="Could not infer schema from rows")
+
+    job_config = LoadJobConfig(
+        write_disposition=WriteDisposition.WRITE_TRUNCATE,
+        schema=schema,
+        source_format="NEWLINE_DELIMITED_JSON",
+    )
+
+    try:
+        job = client.load_table_from_json(payload.rows, table_ref, job_config=job_config)
+        job.result()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload rows to BigQuery: {e}")
+
+    table = client.get_table(table_ref)
+
+    return BigQueryUploadResponse(
+        dataset_id=dataset_id,
+        table_id=table_id,
+        rows_loaded=table.num_rows,
+    )
 
 
 @router.post("/sync/{dataset_id}/{table_id}", response_model=SyncResponse)

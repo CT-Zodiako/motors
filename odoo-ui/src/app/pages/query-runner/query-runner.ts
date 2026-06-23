@@ -1,23 +1,36 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, OdooQuery, QueryResult } from '../../services/odoo-queries';
-import { SelectModule } from 'primeng/select';
-import { ButtonModule } from 'primeng/button';
+import { BigQueryService, BigQueryDataset } from '../../services/bigquery';
+import { Select } from 'primeng/select';
+import { Button } from 'primeng/button';
 import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
-import { ChipModule } from 'primeng/chip';
-import { SkeletonModule } from 'primeng/skeleton';
+import { Tag } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
-import { SplitButtonModule } from 'primeng/splitbutton';
+import { SplitButton } from 'primeng/splitbutton';
+import { Dialog } from 'primeng/dialog';
+import { ProgressSpinner } from 'primeng/progressspinner';
+import { InputTextModule } from 'primeng/inputtext';
 
 @Component({
   selector: 'app-query-runner',
-  imports: [FormsModule, SelectModule, ButtonModule, TableModule, TagModule, ChipModule, SkeletonModule, SplitButtonModule],
+  imports: [
+    FormsModule,
+    Select,
+    Button,
+    TableModule,
+    Tag,
+    SplitButton,
+    Dialog,
+    ProgressSpinner,
+    InputTextModule,
+  ],
   templateUrl: './query-runner.html',
   styleUrl: './query-runner.css',
 })
 export class QueryRunner implements OnInit {
   private svc = inject(OdooQueriesService);
+  private bq = inject(BigQueryService);
   private msg = inject(MessageService);
   private apiBase = 'http://localhost:8000';
 
@@ -26,6 +39,18 @@ export class QueryRunner implements OnInit {
   running = signal(false);
   result = signal<QueryResult | null>(null);
   checkedColumns = signal<Set<string>>(new Set());
+
+  bigQueryDialogVisible = signal(false);
+  bigQueryDatasets = signal<BigQueryDataset[]>([]);
+  selectedBigQueryDataset = signal<BigQueryDataset | null>(null);
+  bigQueryTableName = signal('');
+  bigQueryLoading = signal(false);
+  bigQuerySubmitting = signal(false);
+
+  insertDialogVisible = signal(false);
+  insertTableName = signal('');
+  generatedSql = signal('');
+  insertLoading = signal(false);
 
   allColumns = computed(() => {
     const data = this.result()?.data;
@@ -105,5 +130,122 @@ export class QueryRunner implements OnInit {
     if (Array.isArray(val)) return val.join(', ');
     if (typeof val === 'object') return JSON.stringify(val);
     return String(val);
+  }
+
+  private _exportableValue(val: unknown): unknown {
+    if (val === null || val === undefined) return null;
+    if (Array.isArray(val)) return val.join(', ');
+    if (typeof val === 'object') return JSON.stringify(val);
+    return val;
+  }
+
+  openBigQueryDialog() {
+    this.bigQueryDialogVisible.set(true);
+    this.selectedBigQueryDataset.set(null);
+    this.bigQueryTableName.set('');
+    this.loadBigQueryDatasets();
+  }
+
+  closeBigQueryDialog() {
+    this.bigQueryDialogVisible.set(false);
+    this.selectedBigQueryDataset.set(null);
+    this.bigQueryTableName.set('');
+  }
+
+  openInsertDialog() {
+    this.insertDialogVisible.set(true);
+    this.insertTableName.set('');
+    this.generatedSql.set('');
+  }
+
+  closeInsertDialog() {
+    this.insertDialogVisible.set(false);
+    this.insertTableName.set('');
+    this.generatedSql.set('');
+  }
+
+  generateInsert() {
+    const table = this.insertTableName().trim();
+    if (!table) return;
+    const cols = this.activeColumns();
+    if (cols.length === 0) return;
+
+    const result = this.result();
+    const rows = (result?.data ?? []).map((row) => {
+      const filtered: Record<string, unknown> = {};
+      for (const col of cols) {
+        filtered[col] = this._exportableValue(row[col]);
+      }
+      return filtered;
+    });
+
+    this.insertLoading.set(true);
+    this.svc.generateInsertPreview(table, cols, rows).subscribe({
+      next: (res) => {
+        this.generatedSql.set(res.sql);
+        this.insertLoading.set(false);
+      },
+      error: () => {
+        this.insertLoading.set(false);
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo generar el SQL' });
+      },
+    });
+  }
+
+  copySql() {
+    const sql = this.generatedSql();
+    if (!sql) return;
+    navigator.clipboard.writeText(sql).then(() => {
+      this.msg.add({ severity: 'success', summary: 'Copiado', detail: 'SQL copiado al portapapeles' });
+    }).catch(() => {
+      this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo copiar el SQL' });
+    });
+  }
+
+  loadBigQueryDatasets() {
+    this.bigQueryLoading.set(true);
+    this.bq.listDatasets().subscribe({
+      next: (res) => {
+        this.bigQueryDatasets.set(res.datasets);
+        this.bigQueryLoading.set(false);
+      },
+      error: () => {
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los datasets de BigQuery' });
+        this.bigQueryLoading.set(false);
+      },
+    });
+  }
+
+  confirmBigQueryUpload() {
+    const dataset = this.selectedBigQueryDataset();
+    const tableName = this.bigQueryTableName().trim();
+    const result = this.result();
+    const cols = this.activeColumns();
+    if (!dataset || !tableName || !result || cols.length === 0) return;
+
+    const rows = result.data.map((row) => {
+      const filtered: Record<string, unknown> = {};
+      for (const col of cols) {
+        filtered[col] = this._exportableValue(row[col]);
+      }
+      return filtered;
+    });
+
+    this.bigQuerySubmitting.set(true);
+    this.bq.uploadToBigQuery(dataset.id, tableName, rows).subscribe({
+      next: (res) => {
+        this.bigQuerySubmitting.set(false);
+        this.msg.add({
+          severity: 'success',
+          summary: 'BigQuery',
+          detail: `Cargados ${res.rows_loaded} registros en ${res.dataset_id}.${res.table_id}`,
+        });
+        this.closeBigQueryDialog();
+      },
+      error: () => {
+        this.bigQuerySubmitting.set(false);
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los datos en BigQuery' });
+      },
+    });
   }
 }

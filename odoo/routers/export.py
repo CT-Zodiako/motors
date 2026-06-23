@@ -5,7 +5,7 @@ import tempfile
 from typing import Literal
 
 import openpyxl
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 
 from db import query as pg_query
@@ -228,3 +228,31 @@ def export_sql(
         media_type="text/plain",
         headers={"Content-Disposition": f"attachment; filename={name}_{target}.sql"},
     )
+
+
+@router.post("/sql-preview")
+def sql_preview(payload: dict = Body(...)) -> dict:
+    table = payload.get("table")
+    columns = payload.get("columns")
+    rows = payload.get("rows", [])
+
+    if not isinstance(table, str) or not table.strip():
+        raise HTTPException(status_code=400, detail="table must be a non-empty string")
+    if not isinstance(columns, list) or len(columns) == 0:
+        raise HTTPException(status_code=400, detail="columns must be a non-empty list")
+    if not all(isinstance(c, str) and c.strip() for c in columns):
+        raise HTTPException(status_code=400, detail="each column must be a non-empty string")
+    if not isinstance(rows, list):
+        raise HTTPException(status_code=400, detail="rows must be a list")
+
+    target = "postgres"
+    col_list = ", ".join(columns)
+
+    lines: list[str] = []
+    lines.extend(_build_create_table(table, columns, rows, target))
+
+    for row in rows:
+        vals = ", ".join(_sql_value(row.get(col), target) for col in columns)
+        lines.append(f"INSERT INTO {table} ({col_list}) VALUES ({vals});")
+
+    return {"sql": "\n".join(lines)}
