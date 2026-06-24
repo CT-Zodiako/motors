@@ -1,0 +1,238 @@
+<div class="page">
+  <div class="page-header">
+    <h1>Programar ejecuciones a BigQuery</h1>
+    <p-button
+      label="Nueva programación"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+
+  <p-table
+    [value]="schedules()"
+    [paginator]="true"
+    [rows]="10"
+    [loading]="loading()"
+    styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+  >
+    <ng-template #header>
+      <tr>
+        <th>Nombre</th>
+        <th>Query</th>
+        <th>Destino</th>
+        <th>Frecuencia</th>
+        <th>Última ejecución</th>
+        <th>Estado</th>
+        <th style="width: 180px">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template #body let-s>
+      <tr>
+        <td>{{ s.name }}</td>
+        <td>{{ s.query_name }}</td>
+        <td>{{ s.dataset_id }}.{{ s.table_id }}</td>
+        <td>{{ scheduleSummary(s) }}</td>
+        <td>{{ s.last_run_at ? (s.last_run_at | date:'short') : '—' }}</td>
+        <td>
+          <p-tag [value]="s.last_run_status || 'Pendiente'" [severity]="statusSeverity(s.last_run_status)" />
+        </td>
+        <td>
+          <div class="row-actions">
+            <p-button
+              [icon]="s.active ? 'pi pi-pause' : 'pi pi-play'"
+              [severity]="s.active ? 'secondary' : 'success'"
+              [text]="true"
+              (onClick)="toggleActive(s)"
+
+            />
+            <p-button icon="pi pi-history" severity="info" [text]="true" (onClick)="openRuns(s)" />
+            <p-button icon="pi pi-play-circle" severity="success" [text]="true" (onClick)="runNow(s)" />
+            <p-button icon="pi pi-pencil" severity="secondary" [text]="true" (onClick)="openEdit(s)" />
+            <p-button icon="pi pi-trash" severity="danger" [text]="true" (onClick)="deleteSchedule(s)" />
+          </div>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  @if (schedules().length === 0 && !loading()) {
+    <p class="muted">No hay programaciones creadas.</p>
+  }
+
+  <p-dialog
+    [(visible)]="dialogVisible"
+    [header]="editing ? 'Editar programación' : 'Nueva programación'"
+    [modal]="true"
+    [closable]="!saving()"
+    [dismissableMask]="!saving()"
+    [style]="{ width: '640px', maxWidth: '90vw' }"
+    styleClass="schedule-dialog"
+  >
+    <div class="schedule-form">
+      <div class="schedule-field">
+        <label for="scheduleName">Nombre</label>
+        <input
+          id="scheduleName"
+          pInputText
+          type="text"
+          [(ngModel)]="name"
+          placeholder="Exportación diaria de ventas"
+          class="schedule-input"
+        />
+      </div>
+
+      <div class="schedule-field">
+        <label>Query</label>
+        <p-select
+          [options]="queries()"
+          [(ngModel)]="queryName"
+          optionLabel="name"
+          optionValue="name"
+          placeholder="Seleccioná un query..."
+          appendTo="body"
+          class="schedule-select"
+        />
+      </div>
+
+      <div class="schedule-row">
+        <div class="schedule-field">
+          <label>Dataset</label>
+          <p-select
+            [options]="datasets()"
+            [(ngModel)]="datasetId"
+            (onChange)="onDatasetChange()"
+            optionLabel="id"
+            optionValue="id"
+            placeholder="Seleccioná un dataset..."
+            appendTo="body"
+            class="schedule-select"
+          />
+        </div>
+
+        <div class="schedule-field">
+          <label>Tabla</label>
+          <p-select
+            [options]="tables()"
+            [(ngModel)]="tableId"
+            optionLabel="id"
+            optionValue="id"
+            [disabled]="!datasetId"
+            placeholder="Seleccioná una tabla..."
+            appendTo="body"
+            class="schedule-select"
+          />
+        </div>
+      </div>
+
+      <div class="schedule-field">
+        <label>Frecuencia</label>
+        <p-select
+          [options]="frequencyOptions"
+          [(ngModel)]="frequency"
+          optionLabel="label"
+          optionValue="value"
+          appendTo="body"
+          class="schedule-select"
+        />
+      </div>
+
+      @if (showHourMinute()) {
+        <div class="schedule-row">
+          <div class="schedule-field">
+            <label>Hora</label>
+            <p-inputnumber [(ngModel)]="hour" [min]="0" [max]="23" styleClass="schedule-input" />
+          </div>
+          <div class="schedule-field">
+            <label>Minuto</label>
+            <p-inputnumber [(ngModel)]="minute" [min]="0" [max]="59" styleClass="schedule-input" />
+          </div>
+        </div>
+      }
+
+      @if (showDayOfWeek()) {
+        <div class="schedule-field">
+          <label>Día de la semana</label>
+          <p-select
+            [options]="dayOfWeekOptions"
+            [(ngModel)]="dayOfWeek"
+            optionLabel="label"
+            optionValue="value"
+            appendTo="body"
+            class="schedule-select"
+          />
+        </div>
+      }
+
+      @if (showDayOfMonth()) {
+        <div class="schedule-field">
+          <label>Día del mes</label>
+          <p-inputnumber [(ngModel)]="dayOfMonth" [min]="1" [max]="31" styleClass="schedule-input" />
+        </div>
+      }
+
+      @if (showIntervalHours()) {
+        <div class="schedule-field">
+          <label>Cada X horas</label>
+          <p-inputnumber [(ngModel)]="intervalHours" [min]="1" [max]="24" styleClass="schedule-input" />
+        </div>
+      }
+
+      <div class="schedule-field inline">
+        <p-checkbox [(ngModel)]="active" [binary]="true" label="Activa" />
+      </div>
+    </div>
+
+    <ng-template #footer>
+      <p-button
+        label="Cancelar"
+        [text]="true"
+        [disabled]="saving()"
+        (onClick)="closeDialog()"
+      />
+      <p-button
+        label="Guardar"
+        icon="pi pi-check"
+        [loading]="saving()"
+        (onClick)="save()"
+      />
+    </ng-template>
+  </p-dialog>
+
+  <p-dialog
+    [(visible)]="runsDialogVisible"
+    [header]="'Historial: ' + (selectedSchedule?.name || '')"
+    [modal]="true"
+    [style]="{ width: '700px', maxWidth: '90vw' }"
+  >
+    <p-table
+      [value]="runs()"
+      [paginator]="true"
+      [rows]="10"
+      [loading]="runsLoading()"
+      styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+    >
+      <ng-template #header>
+        <tr>
+          <th>Inicio</th>
+          <th>Fin</th>
+          <th>Estado</th>
+          <th>Filas</th>
+          <th>Mensaje</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-r>
+        <tr>
+          <td>{{ r.started_at | date:'short' }}</td>
+          <td>{{ r.finished_at ? (r.finished_at | date:'short') : '—' }}</td>
+          <td><p-tag [value]="r.status" [severity]="statusSeverity(r.status)" /></td>
+          <td>{{ r.rows_loaded ?? '—' }}</td>
+          <td>{{ r.message || '—' }}</td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    <ng-template #footer>
+      <p-button label="Cerrar" [text]="true" (onClick)="closeRuns()" />
+    </ng-template>
+  </p-dialog>
+</div>
