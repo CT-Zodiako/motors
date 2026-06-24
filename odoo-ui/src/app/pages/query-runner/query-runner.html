@@ -134,24 +134,46 @@
         <p-select
           [options]="bigQueryDatasets()"
           [(ngModel)]="selectedBigQueryDataset"
+          (onChange)="onBigQueryDatasetChange()"
           optionLabel="id"
           [disabled]="bigQueryLoading() || bigQuerySubmitting()"
           placeholder="Seleccioná un dataset..."
           styleClass="bq-select"
         />
 
-        <div class="bq-field">
-          <label for="bigQueryTableName">Nombre de la tabla</label>
-          <input
-            id="bigQueryTableName"
-            pInputText
-            type="text"
-            [(ngModel)]="bigQueryTableName"
-            placeholder="my_table"
+        @if (selectedBigQueryDataset()) {
+          <div class="bq-field">
+            <p-checkbox
+              [(ngModel)]="bigQueryCreateNewTable"
+              [binary]="true"
+              label="Crear nueva tabla"
+            />
+          </div>
+        }
+
+        @if (bigQueryCreateNewTable()) {
+          <div class="bq-field">
+            <label for="bigQueryTableName">Nombre de la nueva tabla</label>
+            <input
+              id="bigQueryTableName"
+              pInputText
+              type="text"
+              [(ngModel)]="bigQueryTableName"
+              placeholder="my_table"
+              [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              class="bq-input"
+            />
+          </div>
+        } @else if (selectedBigQueryDataset()) {
+          <p-select
+            [options]="bigQueryTables()"
+            [(ngModel)]="selectedBigQueryTable"
+            optionLabel="id"
             [disabled]="bigQueryLoading() || bigQuerySubmitting()"
-            class="bq-input"
+            placeholder="Seleccioná una tabla existente..."
+            styleClass="bq-select"
           />
-        </div>
+        }
       </div>
 
       <ng-template #footer>
@@ -165,7 +187,7 @@
           label="Confirmar"
           icon="pi pi-check"
           [loading]="bigQuerySubmitting()"
-          [disabled]="!selectedBigQueryDataset() || !bigQueryTableName().trim() || bigQueryLoading() || activeColumns().length === 0"
+          [disabled]="!selectedBigQueryDataset() || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable() ? !bigQueryTableName().trim() : !selectedBigQueryTable())"
           (onClick)="confirmBigQueryUpload()"
         />
       </ng-template>

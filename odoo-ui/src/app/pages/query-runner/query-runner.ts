@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, OdooQuery, QueryResult } from '../../services/odoo-queries';
-import { BigQueryService, BigQueryDataset } from '../../services/bigquery';
+import { BigQueryService, BigQueryDataset, BigQueryTable } from '../../services/bigquery';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
 import { TableModule } from 'primeng/table';
@@ -11,6 +11,7 @@ import { SplitButton } from 'primeng/splitbutton';
 import { Dialog } from 'primeng/dialog';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { InputTextModule } from 'primeng/inputtext';
+import { Checkbox } from 'primeng/checkbox';
 
 @Component({
   selector: 'app-query-runner',
@@ -24,6 +25,7 @@ import { InputTextModule } from 'primeng/inputtext';
     Dialog,
     ProgressSpinner,
     InputTextModule,
+    Checkbox,
   ],
   templateUrl: './query-runner.html',
   styleUrl: './query-runner.css',
@@ -42,8 +44,11 @@ export class QueryRunner implements OnInit {
 
   bigQueryDialogVisible = signal(false);
   bigQueryDatasets = signal<BigQueryDataset[]>([]);
+  bigQueryTables = signal<BigQueryTable[]>([]);
   selectedBigQueryDataset = signal<BigQueryDataset | null>(null);
+  selectedBigQueryTable = signal<BigQueryTable | null>(null);
   bigQueryTableName = signal('');
+  bigQueryCreateNewTable = signal(false);
   bigQueryLoading = signal(false);
   bigQuerySubmitting = signal(false);
 
@@ -142,14 +147,20 @@ export class QueryRunner implements OnInit {
   openBigQueryDialog() {
     this.bigQueryDialogVisible.set(true);
     this.selectedBigQueryDataset.set(null);
+    this.selectedBigQueryTable.set(null);
+    this.bigQueryTables.set([]);
     this.bigQueryTableName.set('');
+    this.bigQueryCreateNewTable.set(false);
     this.loadBigQueryDatasets();
   }
 
   closeBigQueryDialog() {
     this.bigQueryDialogVisible.set(false);
     this.selectedBigQueryDataset.set(null);
+    this.selectedBigQueryTable.set(null);
+    this.bigQueryTables.set([]);
     this.bigQueryTableName.set('');
+    this.bigQueryCreateNewTable.set(false);
   }
 
   openInsertDialog() {
@@ -216,12 +227,34 @@ export class QueryRunner implements OnInit {
     });
   }
 
+  onBigQueryDatasetChange() {
+    const dataset = this.selectedBigQueryDataset();
+    this.selectedBigQueryTable.set(null);
+    this.bigQueryTables.set([]);
+    if (!dataset) return;
+    this.bigQueryLoading.set(true);
+    this.bq.listTables(dataset.id).subscribe({
+      next: (res) => {
+        this.bigQueryTables.set(res.tables);
+        this.bigQueryLoading.set(false);
+      },
+      error: () => {
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas de BigQuery' });
+        this.bigQueryLoading.set(false);
+      },
+    });
+  }
+
   confirmBigQueryUpload() {
     const dataset = this.selectedBigQueryDataset();
-    const tableName = this.bigQueryTableName().trim();
     const result = this.result();
     const cols = this.activeColumns();
-    if (!dataset || !tableName || !result || cols.length === 0) return;
+    if (!dataset || !result || cols.length === 0) return;
+
+    const tableName = this.bigQueryCreateNewTable()
+      ? this.bigQueryTableName().trim()
+      : this.selectedBigQueryTable()?.id ?? '';
+    if (!tableName) return;
 
     const rows = result.data.map((row) => {
       const filtered: Record<string, unknown> = {};
