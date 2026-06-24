@@ -44,17 +44,25 @@ export class QueryRunner implements OnInit {
   bigQueryDialogVisible = signal(false);
   bigQueryDatasets = signal<BigQueryDataset[]>([]);
   bigQueryTables = signal<BigQueryTable[]>([]);
-  selectedBigQueryDataset = signal<BigQueryDataset | null>(null);
-  selectedBigQueryTableId = signal<string>('');
-  bigQueryTableName = signal('');
-  bigQueryCreateNewTable = signal(false);
   bigQueryLoading = signal(false);
   bigQuerySubmitting = signal(false);
 
+  // Dialog model properties: use plain fields for ngModel to avoid signal
+  // change-detection issues with PrimeNG Select.
+  selectedBigQueryDataset: BigQueryDataset | null = null;
+  selectedBigQueryTableId = '';
+  bigQueryTableName = '';
+  bigQueryCreateNewTable = false;
+  bigQueryModeOptions = [
+    { label: 'Usar tabla existente', value: false },
+    { label: 'Crear nueva tabla', value: true },
+  ];
+
   insertDialogVisible = signal(false);
-  insertTableName = signal('');
-  generatedSql = signal('');
   insertLoading = signal(false);
+
+  insertTableName = '';
+  generatedSql = signal('');
 
   allColumns = computed(() => {
     const data = this.result()?.data;
@@ -145,37 +153,37 @@ export class QueryRunner implements OnInit {
 
   openBigQueryDialog() {
     this.bigQueryDialogVisible.set(true);
-    this.selectedBigQueryDataset.set(null);
-    this.selectedBigQueryTableId.set('');
+    this.selectedBigQueryDataset = null;
+    this.selectedBigQueryTableId = '';
     this.bigQueryTables.set([]);
-    this.bigQueryTableName.set('');
-    this.bigQueryCreateNewTable.set(false);
+    this.bigQueryTableName = '';
+    this.bigQueryCreateNewTable = false;
     this.loadBigQueryDatasets();
   }
 
   closeBigQueryDialog() {
     this.bigQueryDialogVisible.set(false);
-    this.selectedBigQueryDataset.set(null);
-    this.selectedBigQueryTableId.set('');
+    this.selectedBigQueryDataset = null;
+    this.selectedBigQueryTableId = '';
     this.bigQueryTables.set([]);
-    this.bigQueryTableName.set('');
-    this.bigQueryCreateNewTable.set(false);
+    this.bigQueryTableName = '';
+    this.bigQueryCreateNewTable = false;
   }
 
   openInsertDialog() {
     this.insertDialogVisible.set(true);
-    this.insertTableName.set('');
+    this.insertTableName = '';
     this.generatedSql.set('');
   }
 
   closeInsertDialog() {
     this.insertDialogVisible.set(false);
-    this.insertTableName.set('');
+    this.insertTableName = '';
     this.generatedSql.set('');
   }
 
   generateInsert() {
-    const table = this.insertTableName().trim();
+    const table = this.insertTableName.trim();
     if (!table) return;
     const cols = this.activeColumns();
     if (cols.length === 0) return;
@@ -227,10 +235,10 @@ export class QueryRunner implements OnInit {
   }
 
   onBigQueryDatasetChange() {
-    const dataset = this.selectedBigQueryDataset();
-    this.selectedBigQueryTableId.set('');
+    const dataset = this.selectedBigQueryDataset;
+    this.selectedBigQueryTableId = '';
     this.bigQueryTables.set([]);
-    this.bigQueryTableName.set('');
+    this.bigQueryTableName = '';
     if (!dataset) return;
     this.bigQueryLoading.set(true);
     this.bq.listTables(dataset.id).subscribe({
@@ -245,20 +253,15 @@ export class QueryRunner implements OnInit {
     });
   }
 
-  bigQueryModeOptions = [
-    { label: 'Usar tabla existente', value: false },
-    { label: 'Crear nueva tabla', value: true },
-  ];
-
   confirmBigQueryUpload() {
-    const dataset = this.selectedBigQueryDataset();
+    const dataset = this.selectedBigQueryDataset;
     const result = this.result();
     const cols = this.activeColumns();
     if (!dataset || !result || cols.length === 0) return;
 
-    const tableName = this.bigQueryCreateNewTable()
-      ? this.bigQueryTableName().trim()
-      : this.selectedBigQueryTableId();
+    const tableName = this.bigQueryCreateNewTable
+      ? this.bigQueryTableName.trim()
+      : this.selectedBigQueryTableId;
     if (!tableName) return;
 
     const rows = result.data.map((row) => {

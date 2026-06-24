@@ -110,7 +110,7 @@
           label="Generar"
           icon="pi pi-cog"
           [loading]="insertLoading()"
-          [disabled]="!insertTableName().trim() || activeColumns().length === 0"
+          [disabled]="!insertTableName.trim() || activeColumns().length === 0"
           (onClick)="generateInsert()"
         />
       </ng-template>
@@ -141,7 +141,7 @@
           styleClass="bq-select"
         />
 
-        @if (selectedBigQueryDataset()) {
+        @if (selectedBigQueryDataset) {
           <div class="bq-field">
             <label>Modo de tabla</label>
             <p-select
@@ -150,12 +150,13 @@
               optionLabel="label"
               optionValue="value"
               [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              placeholder="Seleccioná el modo..."
               styleClass="bq-select"
             />
           </div>
         }
 
-        @if (bigQueryCreateNewTable()) {
+        @if (bigQueryCreateNewTable) {
           <div class="bq-field">
             <label for="bigQueryTableName">Nombre de la nueva tabla</label>
             <input
@@ -168,7 +169,7 @@
               class="bq-input"
             />
           </div>
-        } @else if (selectedBigQueryDataset()) {
+        } @else if (selectedBigQueryDataset) {
           <p-select
             [options]="bigQueryTables()"
             [(ngModel)]="selectedBigQueryTableId"
@@ -192,7 +193,7 @@
           label="Confirmar"
           icon="pi pi-check"
           [loading]="bigQuerySubmitting()"
-          [disabled]="!selectedBigQueryDataset() || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable() ? !bigQueryTableName().trim() : !selectedBigQueryTableId())"
+          [disabled]="!selectedBigQueryDataset || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable ? !bigQueryTableName.trim() : !selectedBigQueryTableId)"
           (onClick)="confirmBigQueryUpload()"
         />
       </ng-template>
