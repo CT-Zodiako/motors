@@ -89,6 +89,14 @@
   padding: 12px 0;
 }
 
+.bq-dialog .p-dialog-content {
+  overflow: visible;
+}
+
+.bq-dialog {
+  max-height: 90vh;
+}
+
 .insert-form {
   display: flex;
   flex-direction: column;

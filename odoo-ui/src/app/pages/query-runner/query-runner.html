@@ -122,6 +122,7 @@
       [modal]="true"
       [closable]="!bigQuerySubmitting()"
       [dismissableMask]="!bigQuerySubmitting()"
+      [style]="{ width: '600px', maxWidth: '90vw' }"
       styleClass="bq-dialog"
     >
       <div class="bq-form">
@@ -138,6 +139,7 @@
           optionLabel="id"
           [disabled]="bigQueryLoading() || bigQuerySubmitting()"
           placeholder="Seleccioná un dataset..."
+          appendTo="body"
           styleClass="bq-select"
         />
 
@@ -151,6 +153,7 @@
               optionValue="value"
               [disabled]="bigQueryLoading() || bigQuerySubmitting()"
               placeholder="Seleccioná el modo..."
+              appendTo="body"
               styleClass="bq-select"
             />
           </div>
@@ -177,6 +180,7 @@
             optionValue="id"
             [disabled]="bigQueryLoading() || bigQuerySubmitting()"
             placeholder="Seleccioná una tabla existente..."
+            appendTo="body"
             styleClass="bq-select"
           />
         }
