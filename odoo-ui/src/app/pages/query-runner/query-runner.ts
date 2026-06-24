@@ -11,7 +11,7 @@ import { SplitButton } from 'primeng/splitbutton';
 import { Dialog } from 'primeng/dialog';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { InputTextModule } from 'primeng/inputtext';
-import { Checkbox } from 'primeng/checkbox';
+
 
 @Component({
   selector: 'app-query-runner',
@@ -25,7 +25,6 @@ import { Checkbox } from 'primeng/checkbox';
     Dialog,
     ProgressSpinner,
     InputTextModule,
-    Checkbox,
   ],
   templateUrl: './query-runner.html',
   styleUrl: './query-runner.css',
@@ -46,7 +45,7 @@ export class QueryRunner implements OnInit {
   bigQueryDatasets = signal<BigQueryDataset[]>([]);
   bigQueryTables = signal<BigQueryTable[]>([]);
   selectedBigQueryDataset = signal<BigQueryDataset | null>(null);
-  selectedBigQueryTable = signal<BigQueryTable | null>(null);
+  selectedBigQueryTableId = signal<string>('');
   bigQueryTableName = signal('');
   bigQueryCreateNewTable = signal(false);
   bigQueryLoading = signal(false);
@@ -147,7 +146,7 @@ export class QueryRunner implements OnInit {
   openBigQueryDialog() {
     this.bigQueryDialogVisible.set(true);
     this.selectedBigQueryDataset.set(null);
-    this.selectedBigQueryTable.set(null);
+    this.selectedBigQueryTableId.set('');
     this.bigQueryTables.set([]);
     this.bigQueryTableName.set('');
     this.bigQueryCreateNewTable.set(false);
@@ -157,7 +156,7 @@ export class QueryRunner implements OnInit {
   closeBigQueryDialog() {
     this.bigQueryDialogVisible.set(false);
     this.selectedBigQueryDataset.set(null);
-    this.selectedBigQueryTable.set(null);
+    this.selectedBigQueryTableId.set('');
     this.bigQueryTables.set([]);
     this.bigQueryTableName.set('');
     this.bigQueryCreateNewTable.set(false);
@@ -229,8 +228,9 @@ export class QueryRunner implements OnInit {
 
   onBigQueryDatasetChange() {
     const dataset = this.selectedBigQueryDataset();
-    this.selectedBigQueryTable.set(null);
+    this.selectedBigQueryTableId.set('');
     this.bigQueryTables.set([]);
+    this.bigQueryTableName.set('');
     if (!dataset) return;
     this.bigQueryLoading.set(true);
     this.bq.listTables(dataset.id).subscribe({
@@ -239,11 +239,16 @@ export class QueryRunner implements OnInit {
         this.bigQueryLoading.set(false);
       },
       error: () => {
-        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas de BigQuery' });
         this.bigQueryLoading.set(false);
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas de BigQuery' });
       },
     });
   }
+
+  bigQueryModeOptions = [
+    { label: 'Usar tabla existente', value: false },
+    { label: 'Crear nueva tabla', value: true },
+  ];
 
   confirmBigQueryUpload() {
     const dataset = this.selectedBigQueryDataset();
@@ -253,7 +258,7 @@ export class QueryRunner implements OnInit {
 
     const tableName = this.bigQueryCreateNewTable()
       ? this.bigQueryTableName().trim()
-      : this.selectedBigQueryTable()?.id ?? '';
+      : this.selectedBigQueryTableId();
     if (!tableName) return;
 
     const rows = result.data.map((row) => {

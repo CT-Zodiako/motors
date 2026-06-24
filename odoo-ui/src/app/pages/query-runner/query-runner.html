@@ -143,10 +143,14 @@
 
         @if (selectedBigQueryDataset()) {
           <div class="bq-field">
-            <p-checkbox
+            <label>Modo de tabla</label>
+            <p-select
+              [options]="bigQueryModeOptions"
               [(ngModel)]="bigQueryCreateNewTable"
-              [binary]="true"
-              label="Crear nueva tabla"
+              optionLabel="label"
+              optionValue="value"
+              [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              styleClass="bq-select"
             />
           </div>
         }
@@ -167,8 +171,9 @@
         } @else if (selectedBigQueryDataset()) {
           <p-select
             [options]="bigQueryTables()"
-            [(ngModel)]="selectedBigQueryTable"
+            [(ngModel)]="selectedBigQueryTableId"
             optionLabel="id"
+            optionValue="id"
             [disabled]="bigQueryLoading() || bigQuerySubmitting()"
             placeholder="Seleccioná una tabla existente..."
             styleClass="bq-select"
@@ -187,7 +192,7 @@
           label="Confirmar"
           icon="pi pi-check"
           [loading]="bigQuerySubmitting()"
-          [disabled]="!selectedBigQueryDataset() || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable() ? !bigQueryTableName().trim() : !selectedBigQueryTable())"
+          [disabled]="!selectedBigQueryDataset() || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable() ? !bigQueryTableName().trim() : !selectedBigQueryTableId())"
           (onClick)="confirmBigQueryUpload()"
         />
       </ng-template>
