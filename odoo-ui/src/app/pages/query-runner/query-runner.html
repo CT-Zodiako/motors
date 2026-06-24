@@ -145,6 +145,19 @@
 
         @if (selectedBigQueryDataset) {
           <div class="bq-field">
+            <label>Acción</label>
+            <p-select
+              [options]="bigQueryActionOptions"
+              [(ngModel)]="bigQueryActionMode"
+              optionLabel="label"
+              optionValue="value"
+              [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              appendTo="body"
+              styleClass="bq-select"
+            />
+          </div>
+
+          <div class="bq-field">
             <label>Modo de tabla</label>
             <p-select
               [options]="bigQueryModeOptions"
@@ -184,6 +197,75 @@
             styleClass="bq-select"
           />
         }
+
+        @if (bigQueryActionMode === 'schedule' && selectedBigQueryDataset) {
+          <div class="bq-field">
+            <label for="bigQueryScheduleName">Nombre de la programación (opcional)</label>
+            <input
+              id="bigQueryScheduleName"
+              pInputText
+              type="text"
+              [(ngModel)]="bigQueryScheduleName"
+              placeholder="{{ selected()?.name }} → dataset.tabla"
+              [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              class="bq-input"
+            />
+          </div>
+
+          <div class="bq-field">
+            <label>Frecuencia</label>
+            <p-select
+              [options]="bigQueryFrequencyOptions"
+              [(ngModel)]="bigQueryFrequency"
+              optionLabel="label"
+              optionValue="value"
+              [disabled]="bigQueryLoading() || bigQuerySubmitting()"
+              appendTo="body"
+              styleClass="bq-select"
+            />
+          </div>
+
+          @if (bigQueryFrequency !== 'hourly') {
+            <div class="bq-row">
+              <div class="bq-field">
+                <label>Hora</label>
+                <p-inputnumber [(ngModel)]="bigQueryScheduleHour" [min]="0" [max]="23" styleClass="bq-input" />
+              </div>
+              <div class="bq-field">
+                <label>Minuto</label>
+                <p-inputnumber [(ngModel)]="bigQueryScheduleMinute" [min]="0" [max]="59" styleClass="bq-input" />
+              </div>
+            </div>
+          }
+
+          @if (bigQueryFrequency === 'weekly') {
+            <div class="bq-field">
+              <label>Día de la semana</label>
+              <p-select
+                [options]="bigQueryScheduleDayOfWeekOptions"
+                [(ngModel)]="bigQueryScheduleDayOfWeek"
+                optionLabel="label"
+                optionValue="value"
+                appendTo="body"
+                styleClass="bq-select"
+              />
+            </div>
+          }
+
+          @if (bigQueryFrequency === 'monthly') {
+            <div class="bq-field">
+              <label>Día del mes</label>
+              <p-inputnumber [(ngModel)]="bigQueryScheduleDayOfMonth" [min]="1" [max]="31" styleClass="bq-input" />
+            </div>
+          }
+
+          @if (bigQueryFrequency === 'hourly') {
+            <div class="bq-field">
+              <label>Cada X horas</label>
+              <p-inputnumber [(ngModel)]="bigQueryScheduleIntervalHours" [min]="1" [max]="24" styleClass="bq-input" />
+            </div>
+          }
+        }
       </div>
 
       <ng-template #footer>
@@ -194,7 +276,7 @@
           (onClick)="closeBigQueryDialog()"
         />
         <p-button
-          label="Confirmar"
+          [label]="bigQueryActionMode === 'schedule' ? 'Programar' : 'Confirmar'"
           icon="pi pi-check"
           [loading]="bigQuerySubmitting()"
           [disabled]="!selectedBigQueryDataset || bigQueryLoading() || activeColumns().length === 0 || (bigQueryCreateNewTable ? !bigQueryTableName.trim() : !selectedBigQueryTableId)"

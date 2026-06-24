@@ -2,6 +2,8 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, OdooQuery, QueryResult } from '../../services/odoo-queries';
 import { BigQueryService, BigQueryDataset, BigQueryTable } from '../../services/bigquery';
+import { SchedulesService, ScheduleFrequency, ScheduleCreatePayload } from '../../services/schedules';
+import { InputNumber } from 'primeng/inputnumber';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
 import { TableModule } from 'primeng/table';
@@ -25,6 +27,7 @@ import { InputTextModule } from 'primeng/inputtext';
     Dialog,
     ProgressSpinner,
     InputTextModule,
+    InputNumber,
   ],
   templateUrl: './query-runner.html',
   styleUrl: './query-runner.css',
@@ -32,6 +35,7 @@ import { InputTextModule } from 'primeng/inputtext';
 export class QueryRunner implements OnInit {
   private svc = inject(OdooQueriesService);
   private bq = inject(BigQueryService);
+  private schedulesSvc = inject(SchedulesService);
   private msg = inject(MessageService);
   private apiBase = 'http://localhost:8000';
 
@@ -56,6 +60,35 @@ export class QueryRunner implements OnInit {
   bigQueryModeOptions = [
     { label: 'Usar tabla existente', value: false },
     { label: 'Crear nueva tabla', value: true },
+  ];
+
+  // Schedule section
+  bigQueryActionMode: 'now' | 'schedule' = 'now';
+  bigQueryActionOptions = [
+    { label: 'Enviar ahora', value: 'now' },
+    { label: 'Programar envío', value: 'schedule' },
+  ];
+  bigQueryScheduleName = '';
+  bigQueryFrequency: ScheduleFrequency = 'daily';
+  bigQueryFrequencyOptions = [
+    { label: 'Cada X horas', value: 'hourly' },
+    { label: 'Diario', value: 'daily' },
+    { label: 'Semanal', value: 'weekly' },
+    { label: 'Mensual', value: 'monthly' },
+  ];
+  bigQueryScheduleHour = 0;
+  bigQueryScheduleMinute = 0;
+  bigQueryScheduleDayOfWeek = 1;
+  bigQueryScheduleDayOfMonth = 1;
+  bigQueryScheduleIntervalHours = 1;
+  bigQueryScheduleDayOfWeekOptions = [
+    { label: 'Domingo', value: 0 },
+    { label: 'Lunes', value: 1 },
+    { label: 'Martes', value: 2 },
+    { label: 'Miércoles', value: 3 },
+    { label: 'Jueves', value: 4 },
+    { label: 'Viernes', value: 5 },
+    { label: 'Sábado', value: 6 },
   ];
 
   insertDialogVisible = signal(false);
@@ -158,6 +191,14 @@ export class QueryRunner implements OnInit {
     this.bigQueryTables.set([]);
     this.bigQueryTableName = '';
     this.bigQueryCreateNewTable = false;
+    this.bigQueryActionMode = 'now';
+    this.bigQueryScheduleName = '';
+    this.bigQueryFrequency = 'daily';
+    this.bigQueryScheduleHour = 0;
+    this.bigQueryScheduleMinute = 0;
+    this.bigQueryScheduleDayOfWeek = 1;
+    this.bigQueryScheduleDayOfMonth = 1;
+    this.bigQueryScheduleIntervalHours = 1;
     this.loadBigQueryDatasets();
   }
 
@@ -168,6 +209,7 @@ export class QueryRunner implements OnInit {
     this.bigQueryTables.set([]);
     this.bigQueryTableName = '';
     this.bigQueryCreateNewTable = false;
+    this.bigQueryActionMode = 'now';
   }
 
   openInsertDialog() {
@@ -264,6 +306,11 @@ export class QueryRunner implements OnInit {
       : this.selectedBigQueryTableId;
     if (!tableName) return;
 
+    if (this.bigQueryActionMode === 'schedule') {
+      this.createSchedule(dataset.id, tableName);
+      return;
+    }
+
     const rows = result.data.map((row) => {
       const filtered: Record<string, unknown> = {};
       for (const col of cols) {
@@ -286,6 +333,47 @@ export class QueryRunner implements OnInit {
       error: () => {
         this.bigQuerySubmitting.set(false);
         this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los datos en BigQuery' });
+      },
+    });
+  }
+
+  createSchedule(datasetId: string, tableId: string) {
+    const q = this.selected();
+    if (!q) return;
+
+    const name = this.bigQueryScheduleName.trim() || `${q.name} → ${datasetId}.${tableId}`;
+    const payload: ScheduleCreatePayload = {
+      name,
+      query_name: q.name,
+      dataset_id: datasetId,
+      table_id: tableId,
+      frequency: this.bigQueryFrequency,
+    };
+
+    if (this.bigQueryFrequency === 'hourly') {
+      payload.interval_hours = this.bigQueryScheduleIntervalHours;
+    } else {
+      payload.hour = this.bigQueryScheduleHour;
+      payload.minute = this.bigQueryScheduleMinute;
+      if (this.bigQueryFrequency === 'weekly') {
+        payload.day_of_week = this.bigQueryScheduleDayOfWeek;
+      }
+      if (this.bigQueryFrequency === 'monthly') {
+        payload.day_of_month = this.bigQueryScheduleDayOfMonth;
+      }
+    }
+
+    this.bigQuerySubmitting.set(true);
+    this.schedulesSvc.create(payload).subscribe({
+      next: () => {
+        this.bigQuerySubmitting.set(false);
+        this.msg.add({ severity: 'success', summary: 'Programado', detail: 'Envío programado correctamente' });
+        this.closeBigQueryDialog();
+      },
+      error: (err) => {
+        this.bigQuerySubmitting.set(false);
+        const detail = err?.error?.detail || 'No se pudo programar el envío';
+        this.msg.add({ severity: 'error', summary: 'Error', detail });
       },
     });
   }

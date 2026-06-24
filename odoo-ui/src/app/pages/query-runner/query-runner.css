@@ -97,6 +97,11 @@
   max-height: 90vh;
 }
 
+.bq-row {
+  display: flex;
+  gap: 16px;
+}
+
 .insert-form {
   display: flex;
   flex-direction: column;
