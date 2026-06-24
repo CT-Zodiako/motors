@@ -228,8 +228,9 @@
           @if (bigQueryFrequency !== 'hourly') {
             <div class="bq-row">
               <div class="bq-field">
-                <label>Hora</label>
+                <label>Hora (24h)</label>
                 <p-inputnumber [(ngModel)]="bigQueryScheduleHour" [min]="0" [max]="23" styleClass="bq-input" />
+                <small class="bq-time-hint">{{ formatScheduleTime() }}</small>
               </div>
               <div class="bq-field">
                 <label>Minuto</label>

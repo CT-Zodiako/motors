@@ -83,6 +83,12 @@
   color: #1d1d1f;
 }
 
+.bq-time-hint {
+  font-size: 12px;
+  color: #6e6e73;
+  margin-top: 2px;
+}
+
 .bq-loading {
   display: flex;
   justify-content: center;

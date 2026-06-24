@@ -169,6 +169,15 @@ export class QueryRunner implements OnInit {
     window.open(`${this.apiBase}/export/${format}/${q.name}${qs ? '?' + qs : ''}`, '_blank');
   }
 
+  formatScheduleTime(): string {
+    const h = this.bigQueryScheduleHour ?? 0;
+    const m = this.bigQueryScheduleMinute ?? 0;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h % 12 === 0 ? 12 : h % 12;
+    const displayMinute = String(m).padStart(2, '0');
+    return `${displayHour}:${displayMinute} ${ampm}`;
+  }
+
   cellValue(row: Record<string, unknown>, col: string): string {
     const val = row[col];
     if (val === null || val === undefined) return '—';
