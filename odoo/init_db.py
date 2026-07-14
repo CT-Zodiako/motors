@@ -46,7 +46,30 @@ def init():
             rows_loaded INTEGER
         )
     """)
-    print("Tables odoo_queries, query_schedules, query_schedule_runs ready.")
+    # query-categories change: idempotent migration steps (order matters)
+    execute("""
+        CREATE TABLE IF NOT EXISTS query_categories (
+            id          SERIAL PRIMARY KEY,
+            name        VARCHAR(100) NOT NULL UNIQUE,
+            description TEXT,
+            created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        )
+    """)
+    execute("""
+        ALTER TABLE odoo_queries
+        ADD COLUMN IF NOT EXISTS category_id INTEGER REFERENCES query_categories(id)
+    """)
+    execute("""
+        INSERT INTO query_categories (name, description)
+        VALUES ('General', 'Default category')
+        ON CONFLICT (name) DO NOTHING
+    """)
+    execute("""
+        UPDATE odoo_queries
+        SET category_id = (SELECT id FROM query_categories WHERE name = 'General')
+        WHERE category_id IS NULL
+    """)
+    print("Tables odoo_queries, query_schedules, query_schedule_runs, query_categories ready.")
 
 if __name__ == "__main__":
     init()

@@ -22,6 +22,37 @@ POST /queries/  →  guarda en odoo_db  →  GET /run/{name}  →  consulta Odoo
 | `domain`      | array   | Filtros en formato Odoo domain                   | `[["customer_rank", ">", 0]]`    |
 | `fields`      | array   | Campos a traer                                   | `["name", "email", "phone"]`     |
 | `limit_val`   | integer | Máximo de registros a devolver                   | `50`                             |
+| `category_id` | integer | Categoría del query (ver `/categories/`)         | `2`                              |
+
+> Si omitís `category_id` al crear, el query cae en la categoría **General**.
+> Si lo omitís al actualizar (mismo `name`), se preserva la categoría existente.
+> Las respuestas de `GET /queries/` y `GET /queries/{name}` incluyen el objeto `category: {id, name}`.
+
+---
+
+## Categorías
+
+Los queries se agrupan por categoría (tabla `query_categories`). La categoría **General** es la default y no se puede borrar.
+
+```bash
+# Listar categorías (orden alfabético)
+curl http://localhost:8000/categories/
+
+# Crear categoría (nombre único; duplicado → 409)
+curl -X POST http://localhost:8000/categories/ \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Finanzas", "description": "Reportes financieros"}'
+
+# Borrar categoría (409 si tiene queries asociados — recategorizá primero)
+curl -X DELETE http://localhost:8000/categories/3
+
+# Recategorizar un query existente
+curl -X PATCH http://localhost:8000/queries/clientes_activos \
+  -H "Content-Type: application/json" \
+  -d '{"category_id": 2}'
+```
+
+> La migración es idempotente: `python init_db.py` crea `query_categories`, agrega la columna `category_id`, seedea `General` y asigna los queries existentes a `General`. Se puede correr cuantas veces haga falta.
 
 ---
 
