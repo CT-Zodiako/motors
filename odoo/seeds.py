@@ -1,6 +1,9 @@
 import json
 from db import execute
 
+# query-categories change: seed categories first, then queries referencing them.
+CATEGORIES = ["Clientes", "Productos", "Ventas", "Facturación"]
+
 SEEDS = [
     {
         "name": "clientes_activos",
@@ -10,6 +13,7 @@ SEEDS = [
         "domain": [["customer_rank", ">", 0]],
         "fields": ["name", "email", "phone", "city"],
         "limit_val": 50,
+        "category": "Clientes",
     },
     {
         "name": "productos_todos",
@@ -19,6 +23,7 @@ SEEDS = [
         "domain": [],
         "fields": ["name", "list_price", "type", "categ_id"],
         "limit_val": 100,
+        "category": "Productos",
     },
     {
         "name": "ventas_confirmadas",
@@ -28,6 +33,7 @@ SEEDS = [
         "domain": [["state", "=", "sale"]],
         "fields": ["name", "partner_id", "amount_total", "date_order"],
         "limit_val": 50,
+        "category": "Ventas",
     },
     {
         "name": "facturas_emitidas",
@@ -37,16 +43,27 @@ SEEDS = [
         "domain": [["move_type", "=", "out_invoice"]],
         "fields": ["name", "partner_id", "amount_total", "state", "invoice_date"],
         "limit_val": 50,
+        "category": "Facturación",
     },
 ]
 
 
 def seed():
+    for c in CATEGORIES:
+        execute(
+            """
+            INSERT INTO query_categories (name)
+            VALUES (%s)
+            ON CONFLICT (name) DO NOTHING
+            """,
+            (c,),
+        )
     for q in SEEDS:
         execute(
             """
-            INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-            VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+            INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val, category_id)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s,
+                    (SELECT id FROM query_categories WHERE name = %s))
             ON CONFLICT (name) DO NOTHING
             """,
             (
@@ -57,9 +74,10 @@ def seed():
                 json.dumps(q["domain"]),
                 json.dumps(q["fields"]),
                 q["limit_val"],
+                q["category"],
             ),
         )
-    print(f"Seeded {len(SEEDS)} queries.")
+    print(f"Seeded {len(CATEGORIES)} categories and {len(SEEDS)} queries.")
 
 
 if __name__ == "__main__":
