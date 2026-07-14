@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, OdooQuery, QueryResult } from '../../services/odoo-queries';
+import { toCategoryGroups } from '../../utils/category-groups';
 import { BigQueryService, BigQueryDataset, BigQueryTable } from '../../services/bigquery';
 import { SchedulesService, ScheduleFrequency, ScheduleCreatePayload } from '../../services/schedules';
 import { InputNumber } from 'primeng/inputnumber';
@@ -44,6 +45,9 @@ export class QueryRunner implements OnInit {
   running = signal(false);
   result = signal<QueryResult | null>(null);
   checkedColumns = signal<Set<string>>(new Set());
+
+  // query-categories change: selector options grouped by category (alphabetical)
+  groupedQueries = computed(() => toCategoryGroups(this.queries()));
 
   bigQueryDialogVisible = signal(false);
   bigQueryDatasets = signal<BigQueryDataset[]>([]);

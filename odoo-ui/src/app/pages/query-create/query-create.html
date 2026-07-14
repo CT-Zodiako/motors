@@ -245,6 +245,33 @@
               <input pInputText [ngModel]="queryName()" (ngModelChange)="queryName.set($event)" [placeholder]="autoName()" class="input-name" />
               <small>Solo letras minúsculas, números y guión bajo. Ej: clientes_activos</small>
             </div>
+            <div class="field-group">
+              <label>Categoría</label>
+              <div class="category-row">
+                <p-select
+                  [options]="categories()"
+                  [ngModel]="selectedCategoryId()"
+                  (ngModelChange)="selectedCategoryId.set($event)"
+                  optionLabel="name"
+                  optionValue="id"
+                  placeholder="Elegí una categoría"
+                  styleClass="category-select"
+                />
+                <p-button label="Nueva categoría…" icon="pi pi-plus" [text]="true" size="small" (onClick)="showNewCategory.set(true)" />
+              </div>
+              @if (showNewCategory()) {
+                <div class="category-row">
+                  <input pInputText [ngModel]="newCategoryName()" (ngModelChange)="newCategoryName.set($event)" placeholder="Nombre de la nueva categoría" />
+                  <p-button label="Crear" size="small" [loading]="creatingCategory()" [disabled]="!newCategoryName().trim()" (onClick)="confirmNewCategory()" />
+                  <p-button label="Cancelar" size="small" [text]="true" (onClick)="showNewCategory.set(false); newCategoryName.set('')" />
+                </div>
+              }
+            </div>
+            <div class="field-group">
+              <label>Límite de registros</label>
+              <p-inputnumber [ngModel]="limitVal()" (ngModelChange)="limitVal.set($event)" [min]="1" [max]="100000" />
+              <small>Cuántos registros devuelve la consulta (por defecto 100).</small>
+            </div>
             <p-button
               label="Crear consulta"
               icon="pi pi-check"
