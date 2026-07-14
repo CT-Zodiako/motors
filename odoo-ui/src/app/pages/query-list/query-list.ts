@@ -1,32 +1,63 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, computed, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { OdooQueriesService, OdooQuery } from '../../services/odoo-queries';
+import { CategoriesService, QueryCategory } from '../../services/categories';
+import { sortByCategoryThenName } from '../../utils/category-groups';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TagModule } from 'primeng/tag';
 import { SkeletonModule } from 'primeng/skeleton';
+import { SelectModule } from 'primeng/select';
 import { MessageService } from 'primeng/api';
 
 @Component({
   selector: 'app-query-list',
-  imports: [TableModule, ButtonModule, TagModule, SkeletonModule],
+  imports: [FormsModule, TableModule, ButtonModule, TagModule, SkeletonModule, SelectModule],
   templateUrl: './query-list.html',
   styleUrl: './query-list.css',
 })
 export class QueryList implements OnInit {
   private svc = inject(OdooQueriesService);
+  private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
 
   queries = signal<OdooQuery[]>([]);
+  categories = signal<QueryCategory[]>([]);
   loading = signal(true);
 
-  ngOnInit() { this.load(); }
+  // query-categories change: rows grouped by category (alphabetical), then by name
+  sortedQueries = computed(() => sortByCategoryThenName(this.queries()));
+
+  ngOnInit() {
+    this.load();
+    this.loadCategories();
+  }
 
   load() {
     this.loading.set(true);
     this.svc.list().pipe(finalize(() => this.loading.set(false))).subscribe({
       next: (data) => this.queries.set(data),
       error: () => this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar los queries' }),
+    });
+  }
+
+  loadCategories() {
+    this.categoriesSvc.list().subscribe({
+      next: (cats) => this.categories.set(cats),
+      error: () => {},
+    });
+  }
+
+  onCategoryChange(q: OdooQuery, categoryId: number) {
+    this.svc.updateCategory(q.name, categoryId).subscribe({
+      next: (updated) => {
+        this.queries.update((rows) => rows.map((r) => (r.name === q.name ? updated : r)));
+        this.msg.add({ severity: 'success', summary: 'Categoría actualizada', detail: `"${q.name}" → ${updated.category?.name}` });
+      },
+      error: () => {
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cambiar la categoría' });
+      },
     });
   }
 

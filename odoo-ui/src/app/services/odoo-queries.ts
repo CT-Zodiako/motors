@@ -2,6 +2,11 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
+export interface QueryCategoryRef {
+  id: number;
+  name: string;
+}
+
 export interface OdooQuery {
   id: number;
   name: string;
@@ -11,6 +16,7 @@ export interface OdooQuery {
   limit_val: number;
   active: boolean;
   created_at: string;
+  category: QueryCategoryRef | null;
 }
 
 export interface QueryResult {
@@ -27,6 +33,7 @@ export interface CreateQueryPayload {
   domain: unknown[];
   fields: string[];
   limit_val: number;
+  category_id?: number;
 }
 
 export interface FieldMeta {
@@ -51,6 +58,10 @@ export class OdooQueriesService {
 
   deactivate(name: string): Observable<unknown> {
     return this.http.delete(`${this.base}/queries/${name}`);
+  }
+
+  updateCategory(name: string, categoryId: number): Observable<OdooQuery> {
+    return this.http.patch<OdooQuery>(`${this.base}/queries/${name}`, { category_id: categoryId });
   }
 
   run(name: string): Observable<QueryResult> {

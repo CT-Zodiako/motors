@@ -5,12 +5,14 @@
   </div>
 
   <p-table
-    [value]="queries()"
+    [value]="sortedQueries()"
     [loading]="loading()"
     [paginator]="true"
     [rows]="10"
     [rowsPerPageOptions]="[10, 25, 50]"
-    [globalFilterFields]="['name', 'description', 'model']"
+    [globalFilterFields]="['name', 'description', 'model', 'category.name']"
+    groupRowsBy="category.name"
+    rowGroupMode="subheader"
     styleClass="p-datatable-striped p-datatable-gridlines"
     #dt
   >
@@ -24,6 +26,15 @@
       </div>
     </ng-template>
 
+    <ng-template #groupheader let-row>
+      <tr class="category-group-row">
+        <td colspan="8">
+          <span class="category-group-label">{{ row.category?.name ?? 'Sin categoría' }}</span>
+          <p-tag [value]="row.category ? '' : 'sin asignar'" severity="secondary" />
+        </td>
+      </tr>
+    </ng-template>
+
     <ng-template #header>
       <tr>
         <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
@@ -31,6 +42,7 @@
         <th pSortableColumn="model">Modelo <p-sortIcon field="model" /></th>
         <th>Método</th>
         <th pSortableColumn="limit_val">Límite <p-sortIcon field="limit_val" /></th>
+        <th>Categoría</th>
         <th>Estado</th>
         <th></th>
       </tr>
@@ -43,6 +55,18 @@
         <td><code>{{ q.model }}</code></td>
         <td>{{ q.method }}</td>
         <td>{{ q.limit_val }}</td>
+        <td>
+          <p-select
+            [options]="categories()"
+            [ngModel]="q.category?.id"
+            (ngModelChange)="onCategoryChange(q, $event)"
+            optionLabel="name"
+            optionValue="id"
+            size="small"
+            appendTo="body"
+            styleClass="category-cell-select"
+          />
+        </td>
         <td>
           <p-tag
             [value]="q.active ? 'Activo' : 'Inactivo'"
@@ -65,7 +89,7 @@
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="7" class="empty-msg">No hay queries registrados.</td>
+        <td colspan="8" class="empty-msg">No hay queries registrados.</td>
       </tr>
     </ng-template>
   </p-table>

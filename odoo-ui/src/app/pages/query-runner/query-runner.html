@@ -5,7 +5,10 @@
 
   <div class="controls-card">
     <p-select
-      [options]="queries()"
+      [options]="groupedQueries()"
+      [group]="true"
+      optionGroupLabel="label"
+      optionGroupChildren="items"
       [(ngModel)]="selected"
       (onChange)="result.set(null)"
       optionLabel="name"

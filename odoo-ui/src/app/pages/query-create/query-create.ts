@@ -1,6 +1,7 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, FieldMeta } from '../../services/odoo-queries';
+import { CategoriesService, QueryCategory } from '../../services/categories';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -51,6 +52,7 @@ const OPERATORS: OperatorOption[] = [
 })
 export class QueryCreate implements OnInit {
   private svc = inject(OdooQueriesService);
+  private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
 
   activeStep = signal(0);
@@ -93,6 +95,14 @@ export class QueryCreate implements OnInit {
 
   queryName = signal('');
   saving = signal(false);
+
+  // query-categories change
+  categories = signal<QueryCategory[]>([]);
+  selectedCategoryId = signal<number | null>(null);
+  showNewCategory = signal(false);
+  newCategoryName = signal('');
+  creatingCategory = signal(false);
+  limitVal = signal(100);
 
   fieldMap = computed(() => {
     const map = new Map<string, FieldMeta>();
@@ -153,6 +163,37 @@ export class QueryCreate implements OnInit {
         this.loadingModels.set(false);
       },
       error: () => this.loadingModels.set(false),
+    });
+    this.categoriesSvc.list().subscribe({
+      next: (cats) => {
+        this.categories.set(cats);
+        const general = cats.find((c) => c.name === 'General') ?? cats[0];
+        if (general && this.selectedCategoryId() === null) {
+          this.selectedCategoryId.set(general.id);
+        }
+      },
+      error: () => {},
+    });
+  }
+
+  confirmNewCategory() {
+    const name = this.newCategoryName().trim();
+    if (!name || this.creatingCategory()) return;
+    this.creatingCategory.set(true);
+    this.categoriesSvc.create(name).subscribe({
+      next: (cat) => {
+        this.categories.update((cs) => [...cs, cat]);
+        this.selectedCategoryId.set(cat.id);
+        this.newCategoryName.set('');
+        this.showNewCategory.set(false);
+        this.creatingCategory.set(false);
+        this.msg.add({ severity: 'success', summary: 'Categoría creada', detail: `"${cat.name}" lista para usar` });
+      },
+      error: (err) => {
+        this.creatingCategory.set(false);
+        const detail = err?.error?.detail ?? 'No se pudo crear la categoría';
+        this.msg.add({ severity: 'error', summary: 'Error', detail });
+      },
     });
   }
 
@@ -251,7 +292,8 @@ export class QueryCreate implements OnInit {
       method: 'search_read',
       domain: this.buildDomain(),
       fields: this.checkedFieldsList().map(f => f.key),
-      limit_val: 0,
+      limit_val: this.limitVal(),
+      category_id: this.selectedCategoryId() ?? undefined,
     }).subscribe({
       next: (res) => {
         this.msg.add({ severity: 'success', summary: '¡Listo!', detail: `Query "${res.registered}" creado correctamente` });
