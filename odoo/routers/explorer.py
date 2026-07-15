@@ -21,6 +21,6 @@ def get_all_models():
         "ir.model",
         "search_read",
         [[]],
-        {"fields": ["name", "model", "info"], "limit": 500},
+        {"fields": ["name", "model", "info"]},  # no limit: Odoo instances have 1000+ models
     )
     return {"total": len(models), "models": models}
