@@ -41,3 +41,26 @@ def test_models_endpoint_returns_every_odoo_model(monkeypatch):
     assert "limit" not in captured["kwargs"], (
         "no limit kwarg must reach Odoo — instances have 1000+ models"
     )
+
+
+def test_fields_endpoint_requests_enriched_field_attributes(monkeypatch):
+    """/explore/fields must fetch the metadata shown on field cards."""
+    captured = {}
+
+    def fake_execute(model, method, args, kwargs=None):
+        captured["model"] = model
+        captured["method"] = method
+        captured["kwargs"] = kwargs or {}
+        return {}
+
+    monkeypatch.setattr(explorer, "odoo_execute", fake_execute)
+
+    client = TestClient(app, raise_server_exceptions=False)
+    res = client.get("/explore/fields/sale.order")
+
+    assert res.status_code == 200
+    assert captured["model"] == "sale.order"
+    assert captured["method"] == "fields_get"
+    attributes = captured["kwargs"].get("attributes", [])
+    for expected in ["string", "type", "required", "readonly", "relation", "help"]:
+        assert expected in attributes, f"fields_get must request '{expected}'"
