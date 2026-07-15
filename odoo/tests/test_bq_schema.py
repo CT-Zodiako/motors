@@ -599,3 +599,56 @@ class TestTriangulateEdgeCases:
         assert infer_column_type([1]) == "INT64"
         # False and 0 mixed → STRING
         assert infer_column_type([False, 0]) == "STRING"
+
+
+# --- skip_rows (file-upload-skip-rows increment) ---
+
+def test_extract_csv_skip_rows():
+    from bq_schema import extract_csv
+    content = "title junk\n,another,params\nname,price\na,1\nb,2\n".encode()
+    table = extract_csv(content, skip_rows=2)
+    assert table.headers == ["name", "price"]
+    assert table.rows == [["a", "1"], ["b", "2"]]
+
+
+def test_extract_csv_skip_rows_default_zero():
+    from bq_schema import extract_csv
+    content = "name,price\na,1\n".encode()
+    table = extract_csv(content)
+    assert table.headers == ["name", "price"]
+
+
+def test_extract_csv_skip_rows_beyond_data():
+    from bq_schema import extract_csv, ExtractionError
+    content = "name,price\na,1\n".encode()
+    try:
+        extract_csv(content, skip_rows=5)
+        assert False, "expected ExtractionError"
+    except ExtractionError as e:
+        assert "skip" in str(e).lower() or "no rows" in str(e).lower()
+
+
+def test_extract_xlsx_skip_rows():
+    from bq_schema import extract_xlsx
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["junk", None])
+    ws.append(["Vendedor", "Enero"])
+    ws.append(["Ana", 10])
+    ws.append(["Luis", 20])
+    bio = io.BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    table = extract_xlsx(bio.read(), "Sheet", skip_rows=1)
+    assert table.headers == ["Vendedor", "Enero"]
+    assert table.rows == [["Ana", 10], ["Luis", 20]]
+
+
+def test_extract_xlsx_skip_rows_negative_rejected():
+    from bq_schema import extract_csv, ExtractionError
+    try:
+        extract_csv(b"a,b\n1,2\n", skip_rows=-1)
+        assert False, "expected ExtractionError"
+    except ExtractionError as e:
+        assert "skip" in str(e).lower() or "negative" in str(e).lower()

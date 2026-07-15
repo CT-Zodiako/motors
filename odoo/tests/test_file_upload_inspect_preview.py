@@ -248,3 +248,43 @@ class TestPreview:
         body = r.json()
         assert body["columns"][0]["type"] == "TIMESTAMP"
         assert body["sample"][0][0] == "2024-01-15T10:30:00"
+
+
+class TestPreviewSkipRows:
+    def test_preview_skip_rows(self, client):
+        content = b"title junk\n,params\nname,price\na,1\nb,2\n"
+        resp = client.post(
+            "/bigquery/upload-file/preview",
+            files={"file": ("d.csv", content, "text/csv")},
+            data={"sourceType": "csv", "skipRows": "2"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert [c["source"] for c in body["columns"]] == ["name", "price"]
+        assert body["totalRows"] == 2
+
+    def test_preview_skip_rows_negative_400(self, client):
+        resp = client.post(
+            "/bigquery/upload-file/preview",
+            files={"file": ("d.csv", b"a,b\n1,2\n", "text/csv")},
+            data={"sourceType": "csv", "skipRows": "-1"},
+        )
+        assert resp.status_code == 400
+
+    def test_preview_skip_rows_beyond_data_400(self, client):
+        resp = client.post(
+            "/bigquery/upload-file/preview",
+            files={"file": ("d.csv", b"a,b\n1,2\n", "text/csv")},
+            data={"sourceType": "csv", "skipRows": "9"},
+        )
+        assert resp.status_code == 400
+
+def test_inspect_csv_with_skip_rows(client):
+    content = b"title junk\n,params\nname,price\na,1\n"
+    resp = client.post(
+        "/bigquery/upload-file/inspect",
+        files={"file": ("d.csv", content, "text/csv")},
+        data={"sourceType": "csv", "skipRows": "2"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["sheetCount"] == 1
