@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, OdooQuery, QueryResult } from '../../services/odoo-queries';
 import { toCategoryGroups } from '../../utils/category-groups';
@@ -48,7 +48,13 @@ export class QueryRunner implements OnInit {
 
   // Visual-only per-column filters for the results table. Never touches
   // result().data, so BigQuery export always sends the full result set.
-  columnFilters = signal<Record<string, string>>({});
+  columnFilters = signal<Record<string, string | undefined>>({});
+
+  private resultsTable = viewChild<Table>('dt');
+
+  hasActiveFilters = computed(() =>
+    Object.values(this.columnFilters()).some(v => (v ?? '').trim().length > 0)
+  );
 
   // query-categories change: selector options grouped by category (alphabetical)
   groupedQueries = computed(() => toCategoryGroups(this.queries()));
@@ -155,7 +161,17 @@ export class QueryRunner implements OnInit {
 
   toggleColumn(col: string) {
     const next = new Set(this.checkedColumns());
-    next.has(col) ? next.delete(col) : next.add(col);
+    if (next.has(col)) {
+      next.delete(col);
+      // A hidden column must not keep filtering the visible rows.
+      if (this.columnFilters()[col]) {
+        const { [col]: _dropped, ...rest } = this.columnFilters();
+        this.columnFilters.set(rest);
+        this.resultsTable()?.filter(null, col, 'contains');
+      }
+    } else {
+      next.add(col);
+    }
     this.checkedColumns.set(next);
   }
 
