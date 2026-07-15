@@ -1,7 +1,14 @@
 <div class="page">
   <div class="page-header">
-    <h1>Nuevo Query</h1>
+    <h1>{{ isEditMode() ? 'Editar Query' : 'Nuevo Query' }}</h1>
   </div>
+
+  @if (isEditMode()) {
+    <div class="edit-summary">
+      <input pInputText class="input-name" [ngModel]="queryName()" readonly />
+      <span class="method-readonly">{{ editingQuery()?.method }}</span>
+    </div>
+  }
 
   <p-stepper [value]="activeStep()" styleClass="custom-stepper">
 
@@ -14,16 +21,17 @@
           <p class="section-label">Más usados</p>
           <div class="model-grid">
             @for (m of pinnedModels; track m.model) {
-              <button class="model-card" [class.selected]="selectedModel()?.model === m.model" (click)="selectModel(m)">
+              <button class="model-card" [class.selected]="selectedModel()?.model === m.model" [disabled]="isEditMode()" (click)="selectModel(m)">
                 <span class="model-icon">{{ m.icon }}</span>
                 <span class="model-label">{{ m.label }}</span>
                 <span class="model-desc">{{ m.description }}</span>
               </button>
             }
+
           </div>
 
           <p class="section-label">
-            Todos los módulos
+            Todos los modelos
             @if (loadingModels()) { <span class="muted-inline">— cargando...</span> }
             @else { <span class="muted-inline">— {{ allModels().length }} disponibles</span> }
           </p>
@@ -242,7 +250,10 @@
           <div class="save-form">
             <div class="field-group">
               <label>Nombre de la consulta</label>
-              <input pInputText [ngModel]="queryName()" (ngModelChange)="queryName.set($event)" [placeholder]="autoName()" class="input-name" />
+              <input pInputText [ngModel]="queryName()" (ngModelChange)="queryName.set($event)" [placeholder]="autoName()" class="input-name" [readonly]="isEditMode()" />
+              @if (isEditMode()) {
+                <span class="method-readonly">{{ editingQuery()?.method }}</span>
+              }
               <small>Solo letras minúsculas, números y guión bajo. Ej: clientes_activos</small>
             </div>
             <div class="field-group">
@@ -287,3 +298,68 @@
 
   </p-stepper>
 </div>
+
+<!-- Propagation Result Dialog -->
+@if (showPropagationDialog()) {
+  <p-dialog
+    [visible]="showPropagationDialog()"
+    (visibleChange)="showPropagationDialog.set($event)"
+    header="Resultado de la propagación"
+    [modal]="true"
+    [style]="{ width: '500px' }"
+  >
+    @if (propagationResult(); as result) {
+      <div class="propagation-summary">
+        <p>Destinos registrados: <strong>{{ result.total }}</strong></p>
+        <p>Actualizados: <strong class="text-green-500">{{ result.ok }}</strong></p>
+        <p>Fallidos: <strong class="text-red-500">{{ result.failed }}</strong></p>
+
+        @if (result.destinations?.length > 0) {
+          <div class="destinations-list">
+            @for (dest of result.destinations; track dest.dataset_id + dest.table_id) {
+              <div class="destination-item">
+                <span class="status-badge" [class.ok]="dest.status === 'ok'" [class.failed]="dest.status === 'failed'" [class.empty]="dest.status === 'empty'">
+                  {{ dest.status === 'ok' ? '✓' : dest.status === 'failed' ? '✗' : '⚠' }}
+                </span>
+                <span>{{ dest.dataset_id }}.{{ dest.table_id }}</span>
+                @if (dest.error) {
+                  <span class="error-text">{{ dest.error }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        @if (result.failed > 0) {
+          <p class="retry-note">Los destinos fallidos se reintentarán en la próxima ejecución programada.</p>
+
+        }
+
+            <p class="muted self-register-note">Los destinos cargados manualmente antes de esta versión aún no están registrados: se re-register automáticamente en su próxima carga manual.</p>
+      </div>
+    }
+  </p-dialog>
+}
+
+<!-- Destructive Confirmation Dialog -->
+@if (showDestructiveConfirm()) {
+  <p-dialog
+    [visible]="showDestructiveConfirm()"
+    (visibleChange)="showDestructiveConfirm.set($event)"
+    header="Confirmar eliminación de campos"
+    [modal]="true"
+    [style]="{ width: '450px' }"
+  >
+    <p>Los siguientes campos serán eliminados de la consulta y sus datos históricos serán borrados de BigQuery:</p>
+    <ul>
+      @for (field of removedFields(); track field) {
+        <li>{{ field }}</li>
+      }
+    </ul>
+    <p>Esta acción no se puede deshacer.</p>
+    <div class="dialog-actions">
+      <p-button label="Cancelar" [text]="true" (onClick)="showDestructiveConfirm.set(false)" />
+      <p-button label="Confirmar y guardar" severity="danger" (onClick)="confirmDestructiveSave()" />
+    </div>
+  </p-dialog>
+}

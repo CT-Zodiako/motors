@@ -4,7 +4,7 @@ from typing import Literal
 from datetime import datetime
 
 import db
-from routers.runner import _fetch_registered
+from routers.runner import _fetch_registered, fetch_query_rows
 from routers.bigquery import upload_to_bigquery, BigQueryUploadPayload
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
@@ -312,7 +312,6 @@ def _execute_schedule_job(schedule_id: int):
 
 
 def _execute_schedule(schedule: dict):
-    from odoo_client import execute as odoo_execute
 
     run_id = db.query(
         "INSERT INTO query_schedule_runs (schedule_id, status) VALUES (%s, %s) RETURNING id",
@@ -321,12 +320,7 @@ def _execute_schedule(schedule: dict):
 
     try:
         registered = _fetch_registered(schedule["query_name"])
-        data = odoo_execute(
-            registered["model"],
-            registered["method"],
-            [registered["domain"]],
-            {"fields": registered["fields"], "limit": False},
-        )
+        data = fetch_query_rows(registered)
 
         # Exportable value normalization (same as frontend)
         def _exportable_value(val):
@@ -343,6 +337,8 @@ def _execute_schedule(schedule: dict):
             schedule["dataset_id"],
             schedule["table_id"],
             BigQueryUploadPayload(rows=rows),
+            query_name=schedule["query_name"],
+            origin="schedule",
         )
 
         db.execute(

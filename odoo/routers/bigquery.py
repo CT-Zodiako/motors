@@ -134,10 +134,15 @@ def _promote_bq_type(a: str, b: str) -> str:
 def _infer_bq_schema(rows: list[dict[str, Any]]) -> list[SchemaField]:
     if not rows:
         return []
-    sample = rows[0]
+    # Union of keys across ALL rows, first-seen order (row-0 prefix preserved for determinism)
+    seen: dict[str, None] = {}
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                _validate_identifier(key, "column")
+                seen[key] = None
     schema = []
-    for key in sample.keys():
-        _validate_identifier(key, "column")
+    for key in seen:
         field_type = _infer_column_type(key, rows)
         schema.append(SchemaField(key, field_type))
     return schema
@@ -194,8 +199,28 @@ def _infer_string_type(value: str) -> str:
     return "STRING"
 
 
+def load_rows_to_bigquery(client, dataset_id, table_id, rows, schema):
+    """Core BigQuery load: WRITE_TRUNCATE with inferred schema. Returns rows_loaded."""
+    table_ref = f"{client.project}.{dataset_id}.{table_id}"
+    job_config = LoadJobConfig(
+        write_disposition=WriteDisposition.WRITE_TRUNCATE,
+        schema=schema,
+        source_format="NEWLINE_DELIMITED_JSON",
+    )
+    job = client.load_table_from_json(rows, table_ref, job_config=job_config)
+    job.result()
+    table = client.get_table(table_ref)
+    return table.num_rows
+
+
 @router.post("/upload/{dataset_id}/{table_id}", response_model=BigQueryUploadResponse)
-def upload_to_bigquery(dataset_id: str, table_id: str, payload: BigQueryUploadPayload):
+def upload_to_bigquery(
+    dataset_id: str,
+    table_id: str,
+    payload: BigQueryUploadPayload,
+    query_name: str | None = None,
+    origin: str = "manual",
+):
     _validate_identifier(dataset_id, "dataset")
     _validate_identifier(table_id, "table")
 
@@ -208,30 +233,31 @@ def upload_to_bigquery(dataset_id: str, table_id: str, payload: BigQueryUploadPa
         )
 
     client = get_bigquery_client()
-    table_ref = f"{client.project}.{dataset_id}.{table_id}"
-
     schema = _infer_bq_schema(payload.rows)
     if not schema:
         raise HTTPException(status_code=400, detail="Could not infer schema from rows")
 
-    job_config = LoadJobConfig(
-        write_disposition=WriteDisposition.WRITE_TRUNCATE,
-        schema=schema,
-        source_format="NEWLINE_DELIMITED_JSON",
-    )
-
     try:
-        job = client.load_table_from_json(payload.rows, table_ref, job_config=job_config)
-        job.result()
+        rows_loaded = load_rows_to_bigquery(client, dataset_id, table_id, payload.rows, schema)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload rows to BigQuery: {e}")
 
-    table = client.get_table(table_ref)
+    # Registry upsert: never fail an upload because of this
+    if query_name:
+        try:
+            from query_registry import upsert_destination
+            upsert_destination(query_name, dataset_id, table_id, origin)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to upsert destination for %s.%s (query %s): %s",
+                dataset_id, table_id, query_name, e,
+            )
 
     return BigQueryUploadResponse(
         dataset_id=dataset_id,
         table_id=table_id,
-        rows_loaded=table.num_rows,
+        rows_loaded=rows_loaded,
     )
 
 

@@ -13,6 +13,8 @@ export interface OdooQuery {
   description: string;
   model: string;
   method: string;
+  domain: unknown[];
+  fields: string[];
   limit_val: number;
   active: boolean;
   created_at: string;
@@ -62,6 +64,10 @@ export class OdooQueriesService {
 
   updateCategory(name: string, categoryId: number): Observable<OdooQuery> {
     return this.http.patch<OdooQuery>(`${this.base}/queries/${name}`, { category_id: categoryId });
+  }
+
+  update(name: string, payload: Partial<CreateQueryPayload>): Observable<{ query: OdooQuery; propagation: { total: number; ok: number; failed: number; destinations: { dataset_id: string; table_id: string; status: string; error?: string }[] } }> {
+    return this.http.patch<{ query: OdooQuery; propagation: any }>(`${this.base}/queries/${encodeURIComponent(name)}`, payload);
   }
 
   run(name: string): Observable<QueryResult> {
