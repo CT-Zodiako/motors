@@ -125,3 +125,21 @@ def test_patch_zero_destinations_propagation(sample_query, monkeypatch):
     assert r.status_code == 200
     assert r.json()["propagation"]["total"] == 0
     assert r.json()["query"]["description"] == "no-dest"
+def test_patch_same_name_value_ok(sample_query):
+    """PATCH with name equal to current value is NOT an immutable violation (200)."""
+    r = client.patch(f"/queries/{sample_query}", json={"name": sample_query})
+    assert r.status_code == 200, r.text
+
+
+def test_patch_empty_body_noop(sample_query):
+    """Empty PATCH body is a 200 no-op; stored query unchanged."""
+    r = client.patch(f"/queries/{sample_query}", json={})
+    assert r.status_code == 200, r.text
+    assert r.json()["query"]["description"] == "desc"
+
+
+def test_patch_limit_zero_clears_limit(sample_query):
+    """limit_val=0 is accepted and stored (0/None = no-limit convention, D6)."""
+    r = client.patch(f"/queries/{sample_query}", json={"limit_val": 0})
+    assert r.status_code == 200, r.text
+    assert r.json()["query"]["limit_val"] == 0

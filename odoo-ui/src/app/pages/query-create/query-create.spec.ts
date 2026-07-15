@@ -225,4 +225,23 @@ describe('QueryCreate (editable-queries edit mode)', () => {
     expect(component.checkedFields().has('name')).toBe(true);
     expect(component.showPropagationDialog()).toBe(false);
   });
+
+  it('propagation summary shows retry note for failed destinations', () => {
+    editState.beginEdit(mockQuery);
+    component.ngOnInit();
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
+      fields: { name: { string: 'Nombre', type: 'char' }, amount: { string: 'Monto', type: 'float' } },
+    });
+    component.save();
+    const req = http.expectOne('http://localhost:8000/queries/sales');
+    req.flush({
+      query: mockQuery,
+      propagation: { total: 1, ok: 0, failed: 1, destinations: [{ dataset_id: 'analytics', table_id: 'sales_daily', status: 'failed', error: 'BQ not found' }] },
+    });
+    fixture.detectChanges();
+    const note = fixture.nativeElement.querySelector('.retry-note');
+    expect(note).toBeTruthy();
+    expect(note.textContent).toContain('reintent');
+  });
+
 });
