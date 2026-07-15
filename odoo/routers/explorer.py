@@ -10,7 +10,7 @@ def get_model_fields(model: str):
         model,
         "fields_get",
         [],
-        {"attributes": ["string", "type", "required", "readonly"]},
+        {"attributes": ["string", "type", "required", "readonly", "relation", "help"]},
     )
     return {"model": model, "fields": fields}
 
