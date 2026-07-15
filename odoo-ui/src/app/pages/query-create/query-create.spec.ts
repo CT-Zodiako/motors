@@ -245,3 +245,74 @@ describe('QueryCreate (editable-queries edit mode)', () => {
   });
 
 });
+
+const RICH_FIELDS_RESPONSE = {
+  fields: {
+    id: { string: 'ID', type: 'integer', required: false, readonly: true },
+    name: { string: 'Nombre', type: 'char', required: true, readonly: false, help: 'Nombre visible del registro' },
+    partner_id: { string: 'Cliente', type: 'many2one', required: true, readonly: false, relation: 'res.partner', help: 'Cliente asociado a la venta' },
+    amount: { string: 'Monto', type: 'float', required: false, readonly: true },
+  },
+};
+
+describe('QueryCreate (field card metadata)', () => {
+  let http: HttpTestingController;
+  let component: QueryCreate;
+  let fixture: ComponentFixture<QueryCreate>;
+
+  beforeEach(() => {
+    const s = setup();
+    http = s.http;
+    component = s.component;
+    fixture = s.fixture;
+  });
+
+  afterEach(() => {
+    http.match(() => true).forEach((r) => {
+      if (r.request.url.includes('/explore/models')) r.flush({ total: 0, models: [] });
+      else if (r.request.url.includes('/categories/')) r.flush([]);
+      else if (r.request.url.includes('/explore/fields/')) r.flush({ fields: {} });
+      else r.flush({});
+    });
+    http.verify();
+    TestBed.resetTestingModule();
+  });
+
+  function selectModelAndFlushFields() {
+    component.selectModel({ name: 'Sale Order', model: 'sale.order' });
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush(RICH_FIELDS_RESPONSE);
+    fixture.detectChanges();
+  }
+
+  const cards = (): HTMLElement[] =>
+    Array.from(fixture.nativeElement.querySelectorAll('.field-card'));
+
+  const cardFor = (key: string): HTMLElement | undefined =>
+    cards().find((el) => el.querySelector('.field-key')?.textContent?.trim() === key);
+
+  it('keeps required, readonly, relation and help metadata on availableFields', () => {
+    selectModelAndFlushFields();
+    const fields = component.availableFields();
+    expect(fields.map((f) => f.key)).toEqual(['partner_id', 'amount', 'name']); // id filtered, sorted by string label
+    const partner = fields.find((f) => f.key === 'partner_id')!;
+    expect(partner.relation).toBe('res.partner');
+    expect(partner.required).toBe(true);
+    expect(partner.help).toBe('Cliente asociado a la venta');
+  });
+
+  it('renders technical key, relation, required badge and help tooltip on each card', () => {
+    selectModelAndFlushFields();
+
+    const partner = cardFor('partner_id')!;
+    expect(partner).toBeTruthy();
+    expect(partner.querySelector('.field-label')!.textContent).toContain('Cliente');
+    expect(partner.querySelector('.field-relation')!.textContent).toContain('res.partner');
+    expect(partner.querySelector('.field-required-badge')).toBeTruthy();
+    expect(partner.getAttribute('title')).toBe('Cliente asociado a la venta');
+
+    const amount = cardFor('amount')!;
+    expect(amount.querySelector('.field-required-badge')).toBeNull();
+    expect(amount.querySelector('.field-relation')).toBeNull();
+    expect(amount.getAttribute('title')).toBeNull();
+  });
+});

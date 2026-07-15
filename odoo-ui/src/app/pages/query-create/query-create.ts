@@ -214,7 +214,7 @@ export class QueryCreate implements OnInit {
     this.svc.getFields(q.model).subscribe({
       next: (res) => {
         const fields: FieldMeta[] = Object.entries(res.fields)
-          .map(([key, meta]) => ({ key, string: meta.string, type: meta.type }))
+          .map(([key, meta]) => ({ key, ...meta }))
           .filter(f => f.key !== 'id')
           .sort((a, b) => a.string.localeCompare(b.string));
         this.availableFields.set(fields);
@@ -277,7 +277,7 @@ export class QueryCreate implements OnInit {
     this.svc.getFields(m.model).subscribe({
       next: (res) => {
         const fields: FieldMeta[] = Object.entries(res.fields)
-          .map(([key, meta]) => ({ key, string: meta.string, type: meta.type }))
+          .map(([key, meta]) => ({ key, ...meta }))
           .filter(f => f.key !== 'id')
           .sort((a, b) => a.string.localeCompare(b.string));
         this.availableFields.set(fields);

@@ -95,10 +95,16 @@
 
             <div class="fields-grid">
               @for (f of filteredFields(); track f.key) {
-                <div class="field-card" [class.checked]="isFieldChecked(f.key)" (click)="toggleField(f.key)">
+                <div class="field-card" [class.checked]="isFieldChecked(f.key)" (click)="toggleField(f.key)" [attr.title]="f.help || null">
                   <div class="field-info">
-                    <span class="field-label">{{ f.string }}</span>
-                    <span class="field-type">{{ f.type }}</span>
+                    <div class="field-title-row">
+                      <span class="field-label">{{ f.string }}</span>
+                      @if (f.required) {
+                        <span class="field-required-badge">Requerido</span>
+                      }
+                    </div>
+                    <code class="field-key">{{ f.key }}</code>
+                    <span class="field-type">{{ f.type }}@if (f.relation) {<span class="field-relation"> → {{ f.relation }}</span>}</span>
                   </div>
                   @if (isFieldChecked(f.key)) {
                     <i class="pi pi-check field-check-icon"></i>
