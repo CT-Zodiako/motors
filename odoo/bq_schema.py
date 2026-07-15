@@ -128,7 +128,12 @@ def sanitize_column_name(raw: str, used: set[str]) -> str:
 # ── CSV extraction ──────────────────────────────────────────────────
 
 
-def extract_csv(content: bytes) -> ExtractedTable:
+def _validate_skip_rows(skip_rows: int) -> None:
+    if skip_rows < 0:
+        raise ExtractionError(f"skip_rows must be >= 0, got {skip_rows}")
+
+
+def extract_csv(content: bytes, skip_rows: int = 0) -> ExtractedTable:
     """Extract a CSV file into an ExtractedTable (D4).
 
     - Decode utf-8-sig (handles BOM); fall back to cp1252 on UnicodeDecodeError.
@@ -155,6 +160,14 @@ def extract_csv(content: bytes) -> ExtractedTable:
     if not records:
         raise ExtractionError("CSV file is empty or has no readable records")
 
+    _validate_skip_rows(skip_rows)
+    if skip_rows:
+        if skip_rows >= len(records):
+            raise ExtractionError(
+                f"skip_rows={skip_rows} consumes all rows of the file"
+            )
+        records = records[skip_rows:]
+
     headers = records[0]
     expected = len(headers)
     rows = []
@@ -175,7 +188,9 @@ def extract_csv(content: bytes) -> ExtractedTable:
 # ── xlsx extraction ─────────────────────────────────────────────────
 
 
-def extract_xlsx(content: bytes, sheet_name: str | None) -> ExtractedTable | list[str]:
+def extract_xlsx(
+    content: bytes, sheet_name: str | None, skip_rows: int = 0
+) -> ExtractedTable | list[str]:
     """Extract an .xlsx file.
 
     If sheet_name is None, return the list of sheet names (for inspect).
@@ -212,15 +227,18 @@ def extract_xlsx(content: bytes, sheet_name: str | None) -> ExtractedTable | lis
     except Exception:
         pass
 
+    _validate_skip_rows(skip_rows)
     headers = None
     rows = []
     for row_idx, row in enumerate(ws.iter_rows(), start=1):
+        if row_idx <= skip_rows:
+            continue
         values = []
         for cell in row:
             val = _extract_xlsx_cell_value(cell)
             values.append(val)
 
-        if row_idx == 1:
+        if headers is None:
             headers = values
             continue
 
@@ -243,6 +261,11 @@ def extract_xlsx(content: bytes, sheet_name: str | None) -> ExtractedTable | lis
                 )
 
         rows.append(values)
+
+    if headers is None:
+        raise ExtractionError(
+            f"skip_rows={skip_rows} consumes all rows of sheet '{sheet_name}'"
+        )
 
     return ExtractedTable(headers=headers, rows=rows, sheet_name=sheet_name)
 
