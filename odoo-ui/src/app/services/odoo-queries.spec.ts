@@ -5,7 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { OdooQueriesService, OdooQuery } from './odoo-queries';
 
-describe('OdooQueriesService (query-categories additions)', () => {
+describe('OdooQueriesService (editable-queries additions)', () => {
   let svc: OdooQueriesService;
   let http: HttpTestingController;
 
@@ -23,41 +23,23 @@ describe('OdooQueriesService (query-categories additions)', () => {
 
   afterEach(() => http.verify());
 
-  it('updateCategory() PATCHes /queries/{name} with category_id', () => {
-    let got: OdooQuery | undefined;
-    svc.updateCategory('daily_sales', 4).subscribe((r) => (got = r));
-    const req = http.expectOne('http://localhost:8000/queries/daily_sales');
+  it('update() PATCHes /queries/{name} with payload and returns propagation', () => {
+    let got: any;
+    svc.update('sales', { fields: ['name'], limit_val: 10 }).subscribe((r) => (got = r));
+    const req = http.expectOne('http://localhost:8000/queries/sales');
     expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({ category_id: 4 });
+    expect(req.request.body).toEqual({ fields: ['name'], limit_val: 10 });
     req.flush({
-      id: 9,
-      name: 'daily_sales',
-      description: '',
-      model: 'sale.order',
-      method: 'search_read',
-      limit_val: 100,
-      active: true,
-      created_at: '',
-      category: { id: 4, name: 'Finance' },
-    } satisfies OdooQuery);
-    expect(got?.category?.name).toBe('Finance');
+      query: { id: 1, name: 'sales' } as OdooQuery,
+      propagation: { total: 2, ok: 2, failed: 0, destinations: [] },
+    });
+    expect(got.propagation.total).toBe(2);
   });
 
-  it('create() accepts an optional category_id in the payload', () => {
-    svc
-      .create({
-        name: 'q1',
-        description: '',
-        model: 'res.partner',
-        method: 'search_read',
-        domain: [],
-        fields: ['name'],
-        limit_val: 100,
-        category_id: 2,
-      })
-      .subscribe();
-    const req = http.expectOne('http://localhost:8000/queries/');
-    expect(req.request.body.category_id).toBe(2);
-    req.flush({ registered: 'q1' });
+  it('update() URL-encodes names with spaces', () => {
+    svc.update('sales report', { fields: ['name'] }).subscribe();
+    const req = http.expectOne('http://localhost:8000/queries/sales%20report');
+    expect(req.request.method).toBe('PATCH');
+    req.flush({ query: {} as OdooQuery, propagation: { total: 0, ok: 0, failed: 0, destinations: [] } });
   });
 });

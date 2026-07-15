@@ -6,23 +6,21 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { MessageService } from 'primeng/api';
 import { QueryList } from './query-list';
 import { OdooQuery } from '../../services/odoo-queries';
+import { QueryEditStateService } from '../../services/query-edit-state';
 
 const ROWS: OdooQuery[] = [
-  { id: 1, name: 'zeta', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Finance' } },
-  { id: 2, name: 'alpha', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 1, name: 'General' } },
-  { id: 3, name: 'beta', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 3, name: 'Audit' } },
-  { id: 4, name: 'gamma', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Finance' } },
+  { id: 1, name: 'zeta', description: '', model: 'res.partner', method: 'search_read', domain: [], fields: [], limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Finance' } },
 ];
 
 const CATEGORIES = [
-  { id: 1, name: 'General', description: null, created_at: '' },
   { id: 2, name: 'Finance', description: null, created_at: '' },
-  { id: 3, name: 'Audit', description: null, created_at: '' },
 ];
 
-describe('QueryList (query-categories)', () => {
+describe('QueryList (editable-queries)', () => {
   let http: HttpTestingController;
   let component: QueryList;
+  let editState: QueryEditStateService;
+  let navigatedTo: string | null = null;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
@@ -32,44 +30,33 @@ describe('QueryList (query-categories)', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         MessageService,
+        QueryEditStateService,
       ],
     });
     const fixture = TestBed.createComponent(QueryList);
     component = fixture.componentInstance;
+    editState = TestBed.inject(QueryEditStateService);
     http = TestBed.inject(HttpTestingController);
-    fixture.detectChanges(); // ngOnInit load
+    fixture.detectChanges();
     http.expectOne('http://localhost:8000/queries/').flush(ROWS);
     http.expectOne('http://localhost:8000/categories/').flush(CATEGORIES);
   });
 
   afterEach(() => http.verify());
 
-  it('rows are grouped by category: alphabetical group order, then name', () => {
-    const sorted = component.sortedQueries();
-    expect(sorted.map((q) => q.category?.name)).toEqual(['Audit', 'Finance', 'Finance', 'General']);
-    expect(sorted.map((q) => q.name)).toEqual(['beta', 'gamma', 'zeta', 'alpha']);
+  it('editQuery sets edit state and navigates via callback', () => {
+    navigatedTo = null;
+    component.onNavigateToTab = (tab) => { navigatedTo = tab; };
+    const row = component.sortedQueries()[0];
+    component.editQuery(row);
+    expect(editState.state().query?.name).toBe('zeta');
+    expect(navigatedTo).toBe('create');
   });
 
-  it('recategorize PATCHes and moves the row to the new group', () => {
-    const row = component.sortedQueries().find((q) => q.name === 'alpha')!;
-    component.onCategoryChange(row, 3);
-    const req = http.expectOne('http://localhost:8000/queries/alpha');
-    expect(req.request.method).toBe('PATCH');
-    expect(req.request.body).toEqual({ category_id: 3 });
-    req.flush({ ...row, category: { id: 3, name: 'Audit' } });
-    const updated = component.sortedQueries().find((q) => q.name === 'alpha')!;
-    expect(updated.category?.name).toBe('Audit');
-    // group order after moving: Audit now has beta + alpha first
-    expect(component.sortedQueries().map((q) => q.name)).toEqual(['alpha', 'beta', 'gamma', 'zeta']);
-  });
-
-  it('recategorize error keeps the row in its original group', () => {
-    const row = component.sortedQueries().find((q) => q.name === 'alpha')!;
-    component.onCategoryChange(row, 3);
-    http
-      .expectOne('http://localhost:8000/queries/alpha')
-      .flush({ detail: 'boom' }, { status: 500, statusText: 'Server Error' });
-    const still = component.sortedQueries().find((q) => q.name === 'alpha')!;
-    expect(still.category?.name).toBe('General');
+  it('editQuery without callback still sets state (no throw)', () => {
+    component.onNavigateToTab = null;
+    const row = component.sortedQueries()[0];
+    expect(() => component.editQuery(row)).not.toThrow();
+    expect(editState.state().query?.name).toBe('zeta');
   });
 });

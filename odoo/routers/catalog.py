@@ -9,7 +9,7 @@ router = APIRouter(prefix="/queries", tags=["catalog"])
 
 # query-categories change: every SELECT embeds the query's category via JOIN.
 _SELECT_WITH_CATEGORY = """
-    SELECT q.id, q.name, q.description, q.model, q.method, q.limit_val, q.active,
+    SELECT q.id, q.name, q.description, q.model, q.method, q.domain, q.fields, q.limit_val, q.active,
            q.created_at, q.category_id,
            CASE WHEN c.id IS NULL THEN NULL
                 ELSE json_build_object('id', c.id, 'name', c.name)
@@ -87,22 +87,72 @@ def register_query(body: QueryIn):
     return {"registered": body.name}
 
 
+class QueryPatchIn(BaseModel):
+    description: str | None = None
+    domain: list | None = None
+    fields: list | None = None
+    limit_val: int | None = None
+    category_id: int | None = None
+    name: str | None = None
+    model: str | None = None
+    method: str | None = None
+
+
 @router.patch("/{name}")
-def recategorize_query(name: str, body: CategoryPatchIn):
+def update_query(name: str, body: QueryPatchIn):
+    # Fetch current
     rows = pg_query(
-        "SELECT id FROM odoo_queries WHERE name = %s AND active = TRUE", (name,)
+        _SELECT_WITH_CATEGORY + " WHERE q.name = %s AND q.active = TRUE", (name,)
     )
     if not rows:
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found")
-    if not category_exists(body.category_id):
+    current = rows[0]
+
+    # Immutability check
+    for field in ("name", "model", "method"):
+        incoming = getattr(body, field)
+        if incoming is not None and incoming != current[field]:
+            raise HTTPException(
+                status_code=400, detail=f"'{field}' is immutable after creation"
+            )
+
+    # Validation
+    if body.fields is not None and len(body.fields) == 0:
+        raise HTTPException(status_code=400, detail="fields must be a non-empty list")
+    if body.domain is not None and not isinstance(body.domain, list):
+        raise HTTPException(status_code=400, detail="domain must be a list")
+    if body.limit_val is not None and body.limit_val < 0:
+        raise HTTPException(status_code=400, detail="limit_val must be >= 0")
+    if body.category_id is not None and not category_exists(body.category_id):
         raise HTTPException(
             status_code=422, detail=f"Category {body.category_id} does not exist"
         )
-    pg_execute(
-        "UPDATE odoo_queries SET category_id = %s WHERE name = %s",
-        (body.category_id, name),
-    )
-    return get_query(name)
+
+    # Build update set (only provided fields)
+    updates = {}
+    if body.description is not None:
+        updates["description"] = body.description
+    if body.domain is not None:
+        updates["domain"] = json.dumps(body.domain)
+    if body.fields is not None:
+        updates["fields"] = json.dumps(body.fields)
+    if body.limit_val is not None:
+        updates["limit_val"] = body.limit_val
+    if body.category_id is not None:
+        updates["category_id"] = body.category_id
+
+    if updates:
+        set_clause = ", ".join(f"{k} = %s" for k in updates.keys())
+        pg_execute(
+            f"UPDATE odoo_queries SET {set_clause} WHERE name = %s",
+            (*updates.values(), name),
+        )
+
+    # Propagation (synchronous, best-effort)
+    from query_propagation import propagate_query_edit
+    updated = get_query(name)
+    propagation = propagate_query_edit(updated)
+    return {"query": updated, "propagation": propagation}
 
 
 @router.delete("/{name}")

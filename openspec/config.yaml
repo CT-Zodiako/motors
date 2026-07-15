@@ -1,0 +1,58 @@
+strict_tdd: true
+context: |
+  odoo-ui is a Node.js/TypeScript, Node.js/TypeScript ESM, Python project.
+  Detected markers: odoo-ui/package.json, odoo-ui/tsconfig.json, odoo-ui/npm package manager, odoo-ui/.angular/cache/21.2.15/odoo-ui/vite/deps/package.json, odoo-ui/.angular/cache/21.2.15/odoo-ui/vite/deps/npm package manager.
+  Package managers: npm.
+  Additional evidence: Test-like files detected (1); examples: odoo-ui/tsconfig.spec.json.
+  Primary test command: cd odoo-ui && npm test.
+  Unit tests: package script (cd odoo-ui && npm test).
+  Integration tests: none.
+  E2E tests: none.
+rules:
+  proposal:
+    require_problem_statement: true
+  spec:
+    require_acceptance_criteria: true
+  design:
+    require_tradeoffs: true
+  tasks:
+    protect_review_workload: true
+  apply:
+    test_command: "cd odoo-ui && npm test"
+  verify:
+    test_command: "cd odoo-ui && npm test"
+testing:
+  detected: "2026-06-23"
+  runner:
+    command: "cd odoo-ui && npm test"
+    framework: "package script"
+  layers:
+    unit: "package script"
+    integration: ""
+    e2e: ""
+  commands:
+    unit:
+      - scope: "odoo-ui"
+        command: "cd odoo-ui && npm test"
+        framework: "package script"
+      - scope: "odoo"
+        command: "cd odoo && .venv/bin/python -m pytest -q"
+        framework: "pytest"
+    integration:
+      []
+    e2e:
+      []
+  coverage:
+    command: ""
+    commands:
+      []
+quality:
+  lint: ""
+  lint_commands:
+    []
+  typecheck: ""
+  typecheck_commands:
+    []
+  format: ""
+  format_commands:
+    []

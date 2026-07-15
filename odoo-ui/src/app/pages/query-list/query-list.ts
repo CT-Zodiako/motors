@@ -1,8 +1,9 @@
-import { Component, inject, OnInit, computed, signal } from '@angular/core';
+import { Component, inject, OnInit, computed, signal, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { OdooQueriesService, OdooQuery } from '../../services/odoo-queries';
 import { CategoriesService, QueryCategory } from '../../services/categories';
+import { QueryEditStateService } from '../../services/query-edit-state';
 import { sortByCategoryThenName } from '../../utils/category-groups';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
@@ -21,6 +22,9 @@ export class QueryList implements OnInit {
   private svc = inject(OdooQueriesService);
   private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
+  private editState = inject(QueryEditStateService);
+
+  @Input() onNavigateToTab: ((tab: 'list' | 'create' | 'runner' | 'bigquery' | 'schedules' | 'upload') => void) | null = null;
 
   queries = signal<OdooQuery[]>([]);
   categories = signal<QueryCategory[]>([]);
@@ -68,5 +72,12 @@ export class QueryList implements OnInit {
         this.load();
       },
     });
+  }
+
+  editQuery(q: OdooQuery) {
+    this.editState.beginEdit(q);
+    if (this.onNavigateToTab) {
+      this.onNavigateToTab('create');
+    }
   }
 }

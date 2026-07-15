@@ -7,7 +7,7 @@ import { SchedulesService, ScheduleFrequency, ScheduleCreatePayload } from '../.
 import { InputNumber } from 'primeng/inputnumber';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
-import { TableModule } from 'primeng/table';
+import { TableModule, type Table } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
 import { SplitButton } from 'primeng/splitbutton';
@@ -45,6 +45,10 @@ export class QueryRunner implements OnInit {
   running = signal(false);
   result = signal<QueryResult | null>(null);
   checkedColumns = signal<Set<string>>(new Set());
+
+  // Visual-only per-column filters for the results table. Never touches
+  // result().data, so BigQuery export always sends the full result set.
+  columnFilters = signal<Record<string, string>>({});
 
   // query-categories change: selector options grouped by category (alphabetical)
   groupedQueries = computed(() => toCategoryGroups(this.queries()));
@@ -133,6 +137,7 @@ export class QueryRunner implements OnInit {
     this.running.set(true);
     this.result.set(null);
     this.checkedColumns.set(new Set());
+    this.columnFilters.set({});
 
     this.svc.run(q.name).subscribe({
       next: (res) => {
@@ -161,6 +166,16 @@ export class QueryRunner implements OnInit {
   }
 
   isChecked(col: string) { return this.checkedColumns().has(col); }
+
+  onColumnFilter(dt: Table, col: string, value: string) {
+    this.columnFilters.update(f => ({ ...f, [col]: value }));
+    dt.filter(value, col, 'contains');
+  }
+
+  clearColumnFilters(dt: Table) {
+    this.columnFilters.set({});
+    dt.clear();
+  }
 
   download(format: 'csv' | 'excel' | 'sql', target?: 'postgres' | 'oracle') {
     const q = this.selected();
@@ -309,10 +324,11 @@ export class QueryRunner implements OnInit {
   }
 
   confirmBigQueryUpload() {
+    const q = this.selected();
     const dataset = this.selectedBigQueryDataset;
     const result = this.result();
     const cols = this.activeColumns();
-    if (!dataset || !result || cols.length === 0) return;
+    if (!q || !dataset || !result || cols.length === 0) return;
 
     const tableName = this.bigQueryCreateNewTable
       ? this.bigQueryTableName.trim()
@@ -333,7 +349,7 @@ export class QueryRunner implements OnInit {
     });
 
     this.bigQuerySubmitting.set(true);
-    this.bq.uploadToBigQuery(dataset.id, tableName, rows).subscribe({
+    this.bq.uploadToBigQuery(dataset.id, tableName, rows, q.name).subscribe({
       next: (res) => {
         this.bigQuerySubmitting.set(false);
         this.msg.add({

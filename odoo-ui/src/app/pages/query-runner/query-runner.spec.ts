@@ -8,10 +8,10 @@ import { QueryRunner } from './query-runner';
 import { OdooQuery } from '../../services/odoo-queries';
 
 const ROWS: OdooQuery[] = [
-  { id: 1, name: 'ventas_hoy', description: '', model: 'sale.order', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Ventas' } },
-  { id: 2, name: 'clientes', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 1, name: 'Clientes' } },
-  { id: 3, name: 'facturas', description: '', model: 'account.move', method: 'search_read', limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Ventas' } },
-  { id: 4, name: 'inactivo', description: '', model: 'res.partner', method: 'search_read', limit_val: 100, active: false, created_at: '', category: { id: 1, name: 'Clientes' } },
+  { id: 1, name: 'ventas_hoy', description: '', model: 'sale.order', method: 'search_read', domain: [], fields: [], limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Ventas' } },
+  { id: 2, name: 'clientes', description: '', model: 'res.partner', method: 'search_read', domain: [], fields: [], limit_val: 100, active: true, created_at: '', category: { id: 1, name: 'Clientes' } },
+  { id: 3, name: 'facturas', description: '', model: 'account.move', method: 'search_read', domain: [], fields: [], limit_val: 100, active: true, created_at: '', category: { id: 2, name: 'Ventas' } },
+  { id: 4, name: 'inactivo', description: '', model: 'res.partner', method: 'search_read', domain: [], fields: [], limit_val: 100, active: false, created_at: '', category: { id: 1, name: 'Clientes' } },
 ];
 
 describe('QueryRunner (query-categories)', () => {

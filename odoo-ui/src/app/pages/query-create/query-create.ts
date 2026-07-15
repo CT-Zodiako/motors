@@ -1,7 +1,8 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { OdooQueriesService, FieldMeta } from '../../services/odoo-queries';
+import { OdooQueriesService, FieldMeta, OdooQuery } from '../../services/odoo-queries';
 import { CategoriesService, QueryCategory } from '../../services/categories';
+import { QueryEditStateService } from '../../services/query-edit-state';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { SelectModule } from 'primeng/select';
@@ -11,6 +12,7 @@ import { TagModule } from 'primeng/tag';
 import { SkeletonModule } from 'primeng/skeleton';
 import { MessageService } from 'primeng/api';
 import { InputNumberModule } from 'primeng/inputnumber';
+import { DialogModule } from 'primeng/dialog';
 
 export interface ModelOption {
   label: string; model: string; description: string; icon: string;
@@ -46,7 +48,7 @@ const OPERATORS: OperatorOption[] = [
 
 @Component({
   selector: 'app-query-create',
-  imports: [FormsModule, ButtonModule, InputTextModule, SelectModule, StepperModule, CardModule, TagModule, SkeletonModule, InputNumberModule],
+  imports: [FormsModule, ButtonModule, InputTextModule, SelectModule, StepperModule, CardModule, TagModule, SkeletonModule, InputNumberModule, DialogModule],
   templateUrl: './query-create.html',
   styleUrl: './query-create.css',
 })
@@ -54,8 +56,18 @@ export class QueryCreate implements OnInit {
   private svc = inject(OdooQueriesService);
   private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
+  private editState = inject(QueryEditStateService);
 
   activeStep = signal(0);
+
+  // Edit mode state
+  isEditMode = signal(false);
+  editingQuery = signal<OdooQuery | null>(null);
+  propagationResult = signal<any | null>(null);
+  showPropagationDialog = signal(false);
+  showDestructiveConfirm = signal(false);
+  removedFields = signal<string[]>([]);
+  originalFields = signal<string[]>([]); // snapshot for destructive confirm
 
   pinnedModels = PINNED;
   allModels = signal<{ name: string; model: string }[]>([]);
@@ -156,6 +168,14 @@ export class QueryCreate implements OnInit {
   }
 
   ngOnInit() {
+    // Check if we're in edit mode
+    const editQuery = this.editState.state().query;
+    if (editQuery) {
+      this.isEditMode.set(true);
+      this.editingQuery.set(editQuery);
+      this.loadQueryForEdit(editQuery);
+    }
+
     this.loadingModels.set(true);
     this.svc.getAllModels().subscribe({
       next: (res) => {
@@ -174,6 +194,48 @@ export class QueryCreate implements OnInit {
       },
       error: () => {},
     });
+  }
+
+  private loadQueryForEdit(q: OdooQuery) {
+    // Pre-fill the wizard with existing query data
+    this.queryName.set(q.name);
+    this.limitVal.set(q.limit_val ?? 100);
+    this.selectedCategoryId.set(q.category?.id ?? null);
+
+    // Snapshot original fields for destructive confirmation
+    this.originalFields.set(q.fields ?? []);
+
+    // Load fields for the model
+    const modelOpt = PINNED.find(p => p.model === q.model) || {
+      label: q.model, model: q.model, description: q.model, icon: '🗂️'
+    };
+    this.selectedModel.set(modelOpt);
+
+    this.svc.getFields(q.model).subscribe({
+      next: (res) => {
+        const fields: FieldMeta[] = Object.entries(res.fields)
+          .map(([key, meta]) => ({ key, string: meta.string, type: meta.type }))
+          .filter(f => f.key !== 'id')
+          .sort((a, b) => a.string.localeCompare(b.string));
+        this.availableFields.set(fields);
+        // Pre-check fields from the saved query
+        this.checkedFields.set(new Set(q.fields ?? []));
+        // Restore filters from domain (inverse of buildDomain)
+        this.filters.set(this.parseDomain(q.domain ?? []));
+        this.loadingFields.set(false);
+      },
+      error: () => {
+        this.fieldsError.set('No se pudieron cargar los campos.');
+        this.loadingFields.set(false);
+      },
+    });
+  }
+
+  private parseDomain(domain: unknown[]): FilterRow[] {
+    if (!Array.isArray(domain)) return [];
+    return domain
+      .filter((item): item is [unknown, unknown, unknown] => Array.isArray(item) && item.length === 3)
+      .map(([field, operator, value]) => ({ field: String(field), operator: String(operator), value } as FilterRow));
   }
 
   confirmNewCategory() {
@@ -198,6 +260,7 @@ export class QueryCreate implements OnInit {
   }
 
   selectModel(opt: ModelOption | { name: string; model: string }) {
+    if (this.isEditMode()) return; // model is immutable in edit mode (spec req 6)
     const m: ModelOption = 'icon' in opt
       ? opt as ModelOption
       : { label: opt.name, model: opt.model, description: opt.model, icon: '🗂️' };
@@ -281,6 +344,11 @@ export class QueryCreate implements OnInit {
   }
 
   save() {
+    if (this.isEditMode()) {
+      this.saveEdit();
+      return;
+    }
+
     const model = this.selectedModel();
     if (!model) return;
     this.saving.set(true);
@@ -305,6 +373,57 @@ export class QueryCreate implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  private saveEdit() {
+    const q = this.editingQuery();
+    if (!q) return;
+
+    const currentFields = this.checkedFieldsList().map(f => f.key);
+    const removed = this.originalFields().filter(f => !currentFields.includes(f));
+    if (removed.length > 0) {
+      this.removedFields.set(removed);
+      this.showDestructiveConfirm.set(true);
+      return;
+    }
+
+    this._doSaveEdit();
+  }
+
+  private _doSaveEdit() {
+    const q = this.editingQuery();
+    if (!q) return;
+
+    this.saving.set(true);
+    const payload: any = {
+      description: q.description, // preserve original description (wizard has no description editor)
+      domain: this.buildDomain(),
+      fields: this.checkedFieldsList().map(f => f.key),
+      limit_val: this.limitVal(),
+      category_id: this.selectedCategoryId() ?? undefined,
+    };
+
+    this.svc.update(q.name, payload).subscribe({
+      next: (res) => {
+        this.propagationResult.set(res.propagation);
+        this.showPropagationDialog.set(true);
+        this.msg.add({ severity: 'success', summary: '¡Listo!', detail: `Query "${q.name}" actualizado` });
+        this.saving.set(false);
+        this.editState.clear();
+        this.isEditMode.set(false);
+        this.editingQuery.set(null);
+        this.originalFields.set([]);
+      },
+      error: (err) => {
+        this.msg.add({ severity: 'error', summary: 'Error', detail: err?.error?.detail || 'No se pudo actualizar' });
+        this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDestructiveSave() {
+    this.showDestructiveConfirm.set(false);
+    this._doSaveEdit();
   }
 
   private reset() {

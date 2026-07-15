@@ -63,11 +63,12 @@ export class BigQueryService {
   uploadToBigQuery(
     datasetId: string,
     tableId: string,
-    rows: Record<string, unknown>[]
+    rows: Record<string, unknown>[],
+    queryName?: string
   ): Observable<BigQueryUploadResponse> {
-    return this.http.post<BigQueryUploadResponse>(
-      `${this.base}/bigquery/upload/${datasetId}/${tableId}`,
-      { rows }
-    );
+    const url = queryName
+      ? `${this.base}/bigquery/upload/${datasetId}/${tableId}?query_name=${encodeURIComponent(queryName)}`
+      : `${this.base}/bigquery/upload/${datasetId}/${tableId}`;
+    return this.http.post<BigQueryUploadResponse>(url, { rows });
   }
 }

@@ -75,13 +75,22 @@
         </td>
         <td>
           @if (q.active) {
-            <p-button
-              label="Desactivar"
-              severity="danger"
-              size="small"
-              [outlined]="true"
-              (onClick)="deactivate(q.name)"
-            />
+            <div class="flex gap-2">
+              <p-button
+                label="Editar"
+                severity="info"
+                size="small"
+                [outlined]="true"
+                (onClick)="editQuery(q)"
+              />
+              <p-button
+                label="Desactivar"
+                severity="danger"
+                size="small"
+                [outlined]="true"
+                (onClick)="deactivate(q.name)"
+              />
+            </div>
           }
         </td>
       </tr>

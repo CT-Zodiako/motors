@@ -13,16 +13,35 @@ def _fetch_registered(name: str) -> dict | None:
     return rows[0] if rows else None
 
 
+def fetch_query_rows(query: dict) -> list[dict]:
+    """Execute a stored query against Odoo and return raw rows.
+
+    Honors query['limit_val'] when set to a positive integer.
+    None / 0 / negative / empty → no limit (False).
+    """
+    limit_val = query.get("limit_val")
+    limit = False
+    if limit_val is not None:
+        try:
+            n = int(limit_val)
+            if n > 0:
+                limit = n
+        except (ValueError, TypeError):
+            pass
+
+    return odoo_execute(
+        query["model"],
+        query["method"],
+        [query["domain"]],
+        {"fields": query["fields"], "limit": limit},
+    )
+
+
 @router.get("/{name}")
 def run_query(name: str):
     registered = _fetch_registered(name)
     if not registered:
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found or inactive")
 
-    result = odoo_execute(
-        registered["model"],
-        registered["method"],
-        [registered["domain"]],
-        {"fields": registered["fields"], "limit": False},
-    )
+    result = fetch_query_rows(registered)
     return {"query": name, "total": len(result), "data": result}

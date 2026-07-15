@@ -69,7 +69,11 @@ def init():
         SET category_id = (SELECT id FROM query_categories WHERE name = 'General')
         WHERE category_id IS NULL
     """)
-    print("Tables odoo_queries, query_schedules, query_schedule_runs, query_categories ready.")
+    # editable-queries: destination registry
+    from query_registry import init_query_destinations, seed_from_schedules
+    init_query_destinations()
+    seed_from_schedules()
+    print("Tables odoo_queries, query_schedules, query_schedule_runs, query_categories, query_destinations ready.")
 
 if __name__ == "__main__":
     init()
