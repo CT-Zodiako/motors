@@ -4,15 +4,16 @@ import { QueryCreate } from './pages/query-create/query-create';
 import { QueryRunner } from './pages/query-runner/query-runner';
 import { BigQuerySync } from './pages/bigquery-sync/bigquery-sync';
 import { ScheduleManager } from './pages/schedule-manager/schedule-manager';
+import { FileUpload } from './pages/file-upload/file-upload';
 import { ToastModule } from 'primeng/toast';
 
-type Tab = 'list' | 'create' | 'runner' | 'bigquery' | 'schedules';
+type Tab = 'list' | 'create' | 'runner' | 'bigquery' | 'schedules' | 'upload';
 
 interface NavItem { id: Tab; label: string; icon: string; }
 
 @Component({
   selector: 'app-root',
-  imports: [QueryList, QueryCreate, QueryRunner, BigQuerySync, ScheduleManager, ToastModule],
+  imports: [QueryList, QueryCreate, QueryRunner, BigQuerySync, ScheduleManager, FileUpload, ToastModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -24,6 +25,7 @@ export class App {
     { id: 'create',     label: 'Nuevo Query',   icon: 'pi-plus-circle' },
     { id: 'runner',     label: 'Ejecutar',      icon: 'pi-play-circle' },
     { id: 'bigquery',   label: 'BigQuery',      icon: 'pi-cloud-download' },
+    { id: 'upload',     label: 'Cargar archivo', icon: 'pi-upload' },
     { id: 'schedules',  label: 'Programar',     icon: 'pi-calendar-clock' },
   ];
 

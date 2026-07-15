@@ -1,0 +1,187 @@
+<div class="file-upload">
+  <ol class="steps">
+    @for (s of steps; track s.id) {
+      <li [class.active]="step() === s.id" [class.done]="stepIndex(s.id) < stepIndex(step())">
+        {{ s.label }}
+      </li>
+    }
+  </ol>
+
+  @if (step() === 'source') {
+    <section>
+      <h2>Subí tu archivo</h2>
+      <p>Aceptamos Excel (.xlsx) o CSV. El archivo no se guarda en ningún lado: solo leemos los datos para cargarlos en BigQuery.</p>
+      <input type="file" accept=".xlsx,.csv" (change)="onFilePicked($event)" />
+      <div class="field start-row">
+        <label>La tabla empieza en la fila</label>
+        <input
+          type="number"
+          min="1"
+          pInputText
+          [ngModel]="startRow()"
+          (ngModelChange)="setStartRow($event)" />
+        <small>Dejalo en 1 salvo que el archivo tenga títulos o notas arriba de la tabla.</small>
+      </div>
+      @if (busy()) {
+        <p class="loading">Leyendo el archivo…</p>
+      }
+      @if (sourceError()) {
+        <p class="error">{{ sourceError() }}</p>
+      }
+      @if (sourceError() && file()) {
+        <p-button label="Reintentar con esta fila" severity="secondary" (onClick)="retry()" />
+      }
+    </section>
+  }
+
+  @if (step() === 'sheet') {
+    <section>
+      <h2>Elegí la hoja</h2>
+      <p>El archivo tiene {{ inspect()?.sheetCount }} hojas. ¿Cuál querés cargar?</p>
+      <div class="sheet-list">
+        @for (name of inspect()?.sheets ?? []; track name) {
+          <p-button [label]="name" icon="pi pi-table" (onClick)="chooseSheet(name)" />
+        }
+      </div>
+      <div class="field start-row">
+        <label>La tabla empieza en la fila</label>
+        <input
+          type="number"
+          min="1"
+          pInputText
+          [ngModel]="startRow()"
+          (ngModelChange)="setStartRow($event)" />
+        <small>Si la hoja tiene títulos arriba de la tabla, indicá la fila del encabezado.</small>
+      </div>
+      @if (busy()) {
+        <p class="loading">Leyendo la hoja…</p>
+      }
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+      <p-button label="Volver" severity="secondary" (onClick)="back()" />
+    </section>
+  }
+
+  @if (step() === 'schema') {
+    <section>
+      <h2>Revisá el esquema</h2>
+      <p>
+        Elegí qué columnas cargar y corregí el nombre y el tipo de cada una.
+        Filas de datos: <strong>{{ preview()?.totalRows }}</strong>.
+      </p>
+      <p-table [value]="columns()">
+        <ng-template #header>
+          <tr>
+            <th>Cargar</th>
+            <th>Columna origen</th>
+            <th>Nombre en BigQuery</th>
+            <th>Tipo</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-col let-i="rowIndex">
+          <tr>
+            <td>
+              <p-checkbox
+                [ngModel]="col.included"
+                (ngModelChange)="updateColumn(i, 'included', $event)"
+                [binary]="true" />
+            </td>
+            <td>{{ col.source }}</td>
+            <td>
+              <input
+                pInputText
+                [ngModel]="col.name"
+                (ngModelChange)="updateColumn(i, 'name', $event)"
+                [class.invalid]="col.included && !nameValid(col.name)" />
+            </td>
+            <td>
+              <p-select
+                [options]="bqTypes"
+                [ngModel]="col.type"
+                (ngModelChange)="updateColumn(i, 'type', $event)" />
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
+      @if (!schemaValid()) {
+        <p class="error">
+          Revisá el esquema: tiene que haber al menos una columna seleccionada y los nombres
+          tienen que ser válidos (letras, números y guion bajo, sin empezar con número) y únicos.
+        </p>
+      }
+      @if (preview()?.sample?.length) {
+        <h3>Muestra (primeras filas)</h3>
+        <table class="sample">
+          <tr>
+            @for (col of preview()?.columns; track col.source) {
+              <th>{{ col.source }}</th>
+            }
+          </tr>
+          @for (row of preview()?.sample?.slice(0, 5); track $index) {
+            <tr>
+              @for (cell of row; track $index) {
+                <td>{{ cell }}</td>
+              }
+            </tr>
+          }
+        </table>
+      }
+      <div class="actions">
+        <p-button label="Volver" severity="secondary" (onClick)="back()" />
+        <p-button label="Continuar" [disabled]="!schemaValid()" (onClick)="goDestination()" />
+      </div>
+    </section>
+  }
+
+  @if (step() === 'destination') {
+    <section>
+      <h2>Definí el destino</h2>
+      <p>
+        La tabla se crea <strong>nueva</strong> con el esquema que aprobaste. Si el nombre ya
+        existe, te pedimos que elijas otro — nunca se pisa ni se modifica una tabla existente.
+      </p>
+      <div class="field">
+        <label>Dataset</label>
+        <p-select
+          [options]="datasets()"
+          optionLabel="id"
+          optionValue="id"
+          [ngModel]="dataset()"
+          (ngModelChange)="dataset.set($event)"
+          placeholder="Elegí un dataset" />
+      </div>
+      <div class="field">
+        <label>Nombre de la tabla nueva</label>
+        <input
+          pInputText
+          [ngModel]="table()"
+          (ngModelChange)="table.set($event)"
+          placeholder="mi_tabla" />
+      </div>
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+      <div class="actions">
+        <p-button label="Volver" severity="secondary" (onClick)="back()" />
+        <p-button
+          [label]="busy() ? 'Cargando…' : 'Crear tabla y cargar'"
+          [disabled]="busy() || !destinationValid()"
+          (onClick)="confirmLoad()" />
+      </div>
+    </section>
+  }
+
+  @if (step() === 'result') {
+    <section>
+      @if (result()) {
+        <h2>¡Listo!</h2>
+        <p>
+          Se cargaron <strong>{{ result()?.rows }}</strong> filas en
+          <strong>{{ result()?.table }}</strong>. Ya la podés usar en tus queries.
+        </p>
+        <p-button label="Cargar otro archivo" icon="pi pi-upload" (onClick)="resetAll()" />
+      }
+    </section>
+  }
+</div>
