@@ -42,6 +42,10 @@ export interface FieldMeta {
   key: string;
   string: string;
   type: string;
+  required?: boolean;
+  readonly?: boolean;
+  relation?: string;
+  help?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -82,8 +86,8 @@ export class OdooQueriesService {
     return this.http.post<{ sql: string }>(`${this.base}/export/sql-preview`, { table, columns, rows });
   }
 
-  getFields(model: string): Observable<{ model: string; fields: Record<string, { string: string; type: string }> }> {
-    return this.http.get<{ model: string; fields: Record<string, { string: string; type: string }> }>(
+  getFields(model: string): Observable<{ model: string; fields: Record<string, { string: string; type: string; required?: boolean; readonly?: boolean; relation?: string; help?: string }> }> {
+    return this.http.get<{ model: string; fields: Record<string, { string: string; type: string; required?: boolean; readonly?: boolean; relation?: string; help?: string }> }>(
       `${this.base}/explore/fields/${model}`
     );
   }
