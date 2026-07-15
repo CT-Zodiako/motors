@@ -21,3 +21,9 @@ node_modules/
 dist/
 build/
 .next/
+
+# Local tooling artifacts and scratch files
+.pi/
+.pi-subagents/
+context.md
+Presupuestos_2026_modelo - Odoo (1).xlsx

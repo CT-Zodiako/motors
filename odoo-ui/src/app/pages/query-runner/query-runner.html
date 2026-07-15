@@ -306,7 +306,23 @@
     @if (result()!.data.length === 0) {
       <p class="muted">Sin resultados.</p>
     } @else {
+      <div class="table-toolbar">
+        <span class="table-toolbar-hint">
+          <i class="pi pi-filter"></i>
+          Filtros visuales por columna — no afectan la exportación ni el envío a BigQuery
+        </span>
+        @if (hasActiveFilters()) {
+          <p-button
+            label="Limpiar filtros"
+            icon="pi pi-filter-slash"
+            [text]="true"
+            size="small"
+            (onClick)="clearColumnFilters(dt)"
+          />
+        }
+      </div>
       <p-table
+        #dt
         [value]="result()!.data"
         [paginator]="true"
         [rows]="20"
@@ -318,6 +334,20 @@
           <tr>
             @for (col of activeColumns(); track col) {
               <th>{{ col }}</th>
+            }
+          </tr>
+          <tr class="col-filter-row">
+            @for (col of activeColumns(); track col) {
+              <th>
+                <input
+                  pInputText
+                  type="text"
+                  class="col-filter-input"
+                  [value]="columnFilters()[col] ?? ''"
+                  (input)="onColumnFilter(dt, col, $any($event.target).value)"
+                  placeholder="Filtrar..."
+                />
+              </th>
             }
           </tr>
         </ng-template>
