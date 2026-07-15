@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import bigquery, catalog, categories, explorer, export, runner, schedules
+from routers import bigquery, catalog, categories, explorer, export, file_upload, runner, schedules
 
 app = FastAPI(title="Odoo Bridge API", version="1.0.0")
 
@@ -17,6 +17,7 @@ app.include_router(runner.router)
 app.include_router(explorer.router)
 app.include_router(export.router)
 app.include_router(bigquery.router)
+app.include_router(file_upload.router)
 app.include_router(schedules.router)
 
 @app.on_event("startup")
