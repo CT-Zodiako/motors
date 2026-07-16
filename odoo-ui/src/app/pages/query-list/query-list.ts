@@ -24,7 +24,7 @@ export class QueryList implements OnInit {
   private msg = inject(MessageService);
   private editState = inject(QueryEditStateService);
 
-  @Input() onNavigateToTab: ((tab: 'list' | 'create' | 'runner' | 'bigquery' | 'schedules' | 'upload') => void) | null = null;
+  @Input() onNavigateToTab: ((tab: 'list' | 'create' | 'runner' | 'schedules' | 'upload') => void) | null = null;
 
   queries = signal<OdooQuery[]>([]);
   categories = signal<QueryCategory[]>([]);
