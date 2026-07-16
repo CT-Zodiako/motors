@@ -304,12 +304,15 @@ class InMemoryConfigStore:
     # destinations
     # ------------------------------------------------------------------
 
-    def list_destinations(self) -> list[dict]:
+    def list_destinations(self, query_name: str | None = None) -> list[dict]:
         cached = self._cache.get("destinations")
-        if cached is not None:
+        if cached is not None and query_name is None:
             return cached
         rows = [codecs.decode_row("query_destinations", r) for r in self._data["query_destinations"]]
-        self._cache.set("destinations", rows)
+        if query_name is not None:
+            rows = [r for r in rows if r["query_name"] == query_name]
+        if query_name is None:
+            self._cache.set("destinations", rows)
         return rows
 
     def upsert_destination(self, dest: dict) -> dict:
@@ -318,6 +321,9 @@ class InMemoryConfigStore:
                     if r["query_name"] == qn and r["dataset_id"] == ds and r["table_id"] == tbl]
         if existing:
             idx = self._data["query_destinations"].index(existing[0])
+            # Preserve id and created_at from the existing row
+            dest.setdefault("id", existing[0]["id"])
+            dest.setdefault("created_at", existing[0]["created_at"])
             self._data["query_destinations"][idx] = codecs.encode_row("query_destinations", dest)
         else:
             if "id" not in dest:
@@ -328,17 +334,17 @@ class InMemoryConfigStore:
         self._cache.invalidate_destinations()
         return dest
 
-    def mark_destination_stale(self, query_name: str, dataset_id: str, table_id: str, error: str | None = None) -> None:
+    def mark_destination_stale(self, dest_id: int, error: str | None = None) -> None:
         for r in self._data["query_destinations"]:
-            if r["query_name"] == query_name and r["dataset_id"] == dataset_id and r["table_id"] == table_id:
+            if r["id"] == dest_id:
                 r["stale"] = True
                 r["last_error"] = error
                 self._cache.invalidate_destinations()
                 return
 
-    def mark_destination_ok(self, query_name: str, dataset_id: str, table_id: str, schema: dict | None = None) -> None:
+    def mark_destination_ok(self, dest_id: int, schema: dict | None = None) -> None:
         for r in self._data["query_destinations"]:
-            if r["query_name"] == query_name and r["dataset_id"] == dataset_id and r["table_id"] == table_id:
+            if r["id"] == dest_id:
                 r["stale"] = False
                 r["last_error"] = None
                 r["last_sync_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
