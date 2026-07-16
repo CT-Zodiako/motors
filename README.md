@@ -6,17 +6,17 @@ Motors es un proyecto full stack para consultar datos de Odoo de forma controlad
 
 | Parte | Carpeta | Tecnología | URL local |
 |-------|---------|------------|-----------|
-| Backend API | `odoo/` | Python, FastAPI, PostgreSQL 17, XML-RPC | `http://localhost:8000` |
+| Backend API | `odoo/` | Python, FastAPI, BigQuery, XML-RPC | `http://localhost:8000` |
 | Frontend UI | `odoo-ui/` | Angular 21, PrimeNG, TypeScript | `http://localhost:4200` |
-| Base de datos | Docker | PostgreSQL 17 | `localhost:5432` |
+| Configuración | BigQuery | `BQ_CONFIG_DATASET` | Google Cloud |
 
 ## ¿De qué se trata?
 
-El sistema funciona como un puente entre una instancia de Odoo y una base de datos PostgreSQL local.
+El sistema funciona como un puente entre una instancia de Odoo y Google BigQuery.
 
 La idea principal es **no ejecutar consultas arbitrarias contra Odoo**. En cambio:
 
-1. El backend guarda consultas registradas en PostgreSQL.
+1. El backend guarda consultas registradas en BigQuery (config store).
 2. La API ejecuta solo esas consultas permitidas contra Odoo.
 3. El frontend permite crear, listar, ejecutar y desactivar consultas.
 4. Los resultados pueden exportarse como CSV, Excel o SQL para PostgreSQL/Oracle.
@@ -28,9 +28,7 @@ La idea principal es **no ejecutar consultas arbitrarias contra Odoo**. En cambi
 - Python 3.12+
 - FastAPI
 - Uvicorn
-- PostgreSQL 17
-- Docker / Docker Compose
-- `psycopg2-binary` para PostgreSQL
+- Google Cloud BigQuery (configuración y datos)
 - `python-dotenv` para variables de entorno
 - `openpyxl` para exportación a Excel
 - XML-RPC para conexión con Odoo
@@ -51,50 +49,22 @@ Antes de levantar el proyecto necesitás tener instalado:
 - Python 3.12 o superior
 - Node.js 18 o superior
 - npm
-- Docker Desktop corriendo
 - Credenciales de una instancia de Odoo
+- Credenciales de Google Cloud (BigQuery) exportadas en `GOOGLE_APPLICATION_CREDENTIALS`
 - Git, si vas a clonar el repositorio
 
 ## Estructura del proyecto
 
 ```text
 motors/
-├── odoo/       # Backend FastAPI + conexión a Odoo + PostgreSQL
-├── odoo-ui/    # Frontend Angular
-└── README.md   # Guía general del proyecto
+├── odoo/              # Backend FastAPI + conexión a Odoo + BigQuery config store
+│   ├── config_store/  # Protocolo, implementaciones en memoria y BigQuery
+│   └── routers/       # Endpoints de la API
+├── odoo-ui/           # Frontend Angular
+└── README.md          # Guía general del proyecto
 ```
 
-## 1. Levantar la base de datos
-
-Desde la raíz del proyecto:
-
-```bash
-cd odoo
-docker compose up -d
-```
-
-Esto levanta un contenedor PostgreSQL 17 llamado `postgres17` en el puerto `5432`.
-
-Datos por defecto:
-
-| Campo | Valor |
-|-------|-------|
-| Host | `localhost` |
-| Puerto | `5432` |
-| Usuario | `postgres` |
-| Password | `123456` |
-| DB inicial | `mi_db` |
-| DB del proyecto | `odoo_db` |
-
-Crear la base usada por la aplicación:
-
-```bash
-docker exec postgres17 psql -U postgres -c "CREATE DATABASE odoo_db;"
-```
-
-> Si la base ya existe, PostgreSQL va a mostrar un error. En ese caso podés continuar.
-
-## 2. Configurar el backend
+## 1. Configurar el backend
 
 Entrá a la carpeta del backend:
 
@@ -124,19 +94,9 @@ ODOO_DB=nombre_de_tu_base
 ODOO_USERNAME=tu@email.com
 ODOO_PASSWORD=tu_password_o_api_key
 
-# PostgreSQL local
-PG_HOST=localhost
-PG_PORT=5432
-PG_DB=odoo_db
-PG_USER=postgres
-PG_PASSWORD=123456
-```
-
-Inicializá las tablas locales y cargá datos de ejemplo:
-
-```bash
-python init_db.py
-python seeds.py
+# BigQuery config store
+BQ_CONFIG_DATASET=config
+GOOGLE_APPLICATION_CREDENTIALS=/ruta/a/tu/credencial.json
 ```
 
 Levantá la API:
@@ -150,7 +110,9 @@ La API queda disponible en:
 - API: `http://localhost:8000`
 - Swagger / documentación interactiva: `http://localhost:8000/docs`
 
-## 3. Levantar el frontend
+Al arrancar, el backend crea el dataset y las tablas de configuración en BigQuery si no existen, e inyecta el `BigQueryConfigStore` como capa de persistencia.
+
+## 2. Levantar el frontend
 
 En otra terminal, desde la raíz del proyecto:
 
@@ -176,14 +138,7 @@ http://localhost:4200
 
 ## Flujo recomendado para desarrollo
 
-Terminal 1 — base de datos:
-
-```bash
-cd odoo
-docker compose up -d
-```
-
-Terminal 2 — backend:
+Terminal 1 — backend:
 
 ```bash
 cd odoo
@@ -191,7 +146,7 @@ source .venv/bin/activate
 uvicorn main:app --reload
 ```
 
-Terminal 3 — frontend:
+Terminal 2 — frontend:
 
 ```bash
 cd odoo-ui
@@ -219,6 +174,7 @@ http://localhost:4200
 | `GET` | `/export/sql/{name}?target=postgres\|oracle` | Exporta SQL para PostgreSQL u Oracle |
 | `GET` | `/explore/models` | Lista modelos disponibles de Odoo |
 | `GET` | `/explore/fields/{model}` | Lista campos de un modelo |
+| `POST` | `/bigquery/upload/{dataset_id}/{table_id}` | Carga datos en BigQuery |
 
 Los endpoints de exportación aceptan el parámetro opcional `columns`:
 
@@ -260,17 +216,16 @@ odoo-ui/dist/odoo-ui/
 |---------|-------------|
 | `odoo/main.py` | Entrada principal de FastAPI |
 | `odoo/odoo_client.py` | Cliente de conexión con Odoo |
-| `odoo/db.py` | Conexión con PostgreSQL |
-| `odoo/init_db.py` | Inicialización de tablas locales |
-| `odoo/seeds.py` | Carga de consultas de ejemplo |
-| `odoo/docker-compose.yml` | PostgreSQL local con Docker |
+| `odoo/config_store/` | Capa de persistencia configurable (protocolo, memoria, BigQuery) |
+| `odoo/config_store/bq_store.py` | Implementación de producción sobre BigQuery |
+| `odoo/config_store/memory_store.py` | Implementación en memoria para tests |
 | `odoo-ui/src/app/services/odoo-queries.ts` | Servicio HTTP del frontend hacia la API |
 | `odoo-ui/src/app/pages/` | Pantallas principales de Angular |
 
 ## Notas importantes
 
-- No subas el archivo `.env` al repositorio: contiene credenciales de Odoo y PostgreSQL.
-- El backend espera que PostgreSQL esté disponible en `localhost:5432`.
+- No subas el archivo `.env` al repositorio: contiene credenciales de Odoo y Google Cloud.
+- El backend espera credenciales de BigQuery válidas en `GOOGLE_APPLICATION_CREDENTIALS`.
 - La UI espera que la API esté disponible en `http://localhost:8000`.
-- El contenedor de PostgreSQL usa por defecto el nombre `postgres17`.
-- Si cambiás puertos o credenciales, actualizá también el `.env` del backend.
+- El dataset de configuración por defecto es `config`; se puede cambiar con `BQ_CONFIG_DATASET`.
+

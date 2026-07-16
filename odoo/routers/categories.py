@@ -24,7 +24,7 @@ def general_category_id() -> int:
             return c["id"]
     raise HTTPException(
         status_code=500,
-        detail="Default category 'General' is missing; run the DB migration (init_db.py).",
+        detail="Default category 'General' is missing; run config_store seed_defaults.",
     )
 
 

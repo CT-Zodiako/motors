@@ -5,8 +5,6 @@ Covers spec requirements: Query Destination Registry (R-CAT-4).
 import pytest
 
 from config_store import get_store
-import init_db
-
 
 def _destinations_for(query_name: str) -> list[dict]:
     return [d for d in get_store().list_destinations() if d["query_name"] == query_name]
@@ -60,10 +58,11 @@ def sample_destination(store, sample_query):
 
 
 def test_init_is_idempotent_for_destinations():
-    init_db.init()
-    count_before = len(get_store().list_destinations())
-    init_db.init()
-    count_after = len(get_store().list_destinations())
+    store = get_store()
+    store.seed_defaults()
+    count_before = len(store.list_destinations())
+    store.seed_defaults()
+    count_after = len(store.list_destinations())
     assert count_before == count_after
 
 
