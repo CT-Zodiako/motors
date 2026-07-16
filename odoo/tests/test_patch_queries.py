@@ -9,21 +9,28 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def ensure_general_category():
     """General category must exist for query creation."""
-    from db import execute
-    execute("INSERT INTO query_categories (name) VALUES ('General') ON CONFLICT DO NOTHING")
+    from config_store import get_store
+    store = get_store()
+    if not any(c["name"] == "General" for c in store.list_categories()):
+        store.create_category("General")
 
 
 @pytest.fixture
 def sample_query():
-    """Create a query and return its name."""
-    from db import execute
-    execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val, category_id, active)
-        VALUES ('test_patch_q', 'desc', 'res.partner', 'search_read', '[]', '[\"name\"]', 50, 1, TRUE)
-        ON CONFLICT (name) DO UPDATE SET active = TRUE, description = EXCLUDED.description
-        """
-    )
+    """Create a query via the store and return its name."""
+    from config_store import get_store
+    store = get_store()
+    store.upsert_query({
+        "name": "test_patch_q",
+        "description": "desc",
+        "model": "res.partner",
+        "method": "search_read",
+        "domain": [],
+        "fields": ["name"],
+        "limit_val": 50,
+        "category_id": next(c["id"] for c in store.list_categories() if c["name"] == "General"),
+        "active": True,
+    })
     return "test_patch_q"
 
 
@@ -125,6 +132,7 @@ def test_patch_zero_destinations_propagation(sample_query, monkeypatch):
     assert r.status_code == 200
     assert r.json()["propagation"]["total"] == 0
     assert r.json()["query"]["description"] == "no-dest"
+
 def test_patch_same_name_value_ok(sample_query):
     """PATCH with name equal to current value is NOT an immutable violation (200)."""
     r = client.patch(f"/queries/{sample_query}", json={"name": sample_query})
@@ -143,3 +151,5 @@ def test_patch_limit_zero_clears_limit(sample_query):
     r = client.patch(f"/queries/{sample_query}", json={"limit_val": 0})
     assert r.status_code == 200, r.text
     assert r.json()["query"]["limit_val"] == 0
+
+

@@ -26,13 +26,13 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 def startup():
-    # WU1: bootstrap config_store alongside new init_db wiring (init_db removed in WU4).
-    # The InMemoryConfigStore here is intentionally a shadow-run for WU1 —
-    # no router consumes it yet; WU4 will replace it with BigQueryConfigStore.
+    # WU2: bootstrap config_store and wire it for routers via set_store(...).
+    # InMemoryConfigStore is the wired impl for WU2; WU4 will swap to BigQuery.
     import time
     import init_db
     from config_store.bootstrap import ensure_schema, seed_defaults
     from config_store.memory_store import InMemoryConfigStore
+    from config_store import set_store
 
     for attempt in range(1, 4):
         try:
@@ -40,7 +40,8 @@ def startup():
             _config_store = InMemoryConfigStore()
             ensure_schema(_config_store)
             seed_defaults(_config_store)
-            logger.info("config_store bootstrap OK (shadow-run, memory)")
+            set_store(_config_store)
+            logger.info("config_store bootstrap OK (InMemoryConfigStore)")
             break
         except Exception as e:
             logger.warning("config_store bootstrap attempt %d failed: %s", attempt, e)

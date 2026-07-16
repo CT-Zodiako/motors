@@ -4,6 +4,9 @@
 - `client`: FastAPI TestClient without lifespan (avoids starting the scheduler).
 - `cleanup`: autouse fixture that removes any row created by tests (names prefixed `t_`).
   Test data NEVER touches seed rows.
+- `store`: fresh InMemoryConfigStore per test, injected via set_store(...).
+  WU2: categories/catalog routers consume the store; PG fixtures remain alive
+  for propagation/schedules/destinations tests (WU3).
 """
 import os
 import sys
@@ -35,6 +38,19 @@ def client(migrated_db):
 
 
 @pytest.fixture(autouse=True)
+def store():
+    """Fresh InMemoryConfigStore per test, seeded with defaults, injected via set_store(...)."""
+    from config_store.memory_store import InMemoryConfigStore
+    from config_store.bootstrap import seed_defaults
+    from config_store import set_store
+
+    _store = InMemoryConfigStore()
+    seed_defaults(_store)
+    set_store(_store)
+    yield _store
+
+
+@pytest.fixture(autouse=True)
 def cleanup():
     yield
     # FK order: queries reference categories, so delete queries first.
@@ -52,3 +68,5 @@ def _table_exists(table: str) -> bool:
         "SELECT 1 AS ok FROM information_schema.tables WHERE table_name = %s", (table,)
     )
     return bool(rows)
+
+
