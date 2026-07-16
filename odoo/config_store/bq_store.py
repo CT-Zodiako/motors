@@ -248,6 +248,7 @@ class BigQueryConfigStore:
             _json_param("fields", patch.get("fields", existing.get("fields"))),
             _int64_param("limit_val", patch.get("limit_val", existing.get("limit_val"))),
             _int64_param("category_id", patch.get("category_id", existing.get("category_id"))),
+            _bool_param("active", patch.get("active", existing.get("active"))),
             _string_param("name", name),
         ]
         self._query(sql.SQL_UPDATE_QUERY(), params)
@@ -260,6 +261,15 @@ class BigQueryConfigStore:
         self._query(sql.SQL_DEACTIVATE_QUERY(), [_string_param("name", name)])
         # Cascade: delete destinations
         self._query(sql.SQL_DELETE_DESTINATIONS_BY_QUERY(), [_string_param("query_name", name)])
+        self._cache.invalidate_queries()
+        self._cache.invalidate_destinations()
+
+    def delete_query(self, name: str) -> None:
+        if self.get_query(name) is None:
+            raise NotFoundError(f"Query {name} not found")
+        # Cascade: delete destinations first to avoid orphan rows
+        self._query(sql.SQL_DELETE_DESTINATIONS_BY_QUERY(), [_string_param("query_name", name)])
+        self._query(sql.SQL_DELETE_QUERY(), [_string_param("name", name)])
         self._cache.invalidate_queries()
         self._cache.invalidate_destinations()
 
@@ -478,4 +488,3 @@ class BigQueryConfigStore:
         )
         job = self._client.load_table_from_file(buf, table_ref, job_config=job_config)
         job.result()
-

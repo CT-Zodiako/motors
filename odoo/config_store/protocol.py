@@ -5,9 +5,10 @@ Contract guarantees:
 - list_runs(schedule_id): ordered by id descending.
 - finish_run: updates the run row AND the parent schedule last_run_* fields.
 - NotFoundError is raised on missing-id lookups (get_schedule, update_schedule,
-  delete_schedule, finish_run, patch_query, deactivate_query).
+  delete_schedule, finish_run, patch_query, deactivate_query, delete_query).
 - ConflictError is raised on uniqueness / FK / General-category violations.
 - delete_schedule cascades to runs; deactivate_query cascades to destinations.
+- delete_query physically removes the query and cascades to destinations.
 - seed_defaults is idempotent: empty-table guards prevent overwriting user rows.
 """
 from __future__ import annotations
@@ -38,6 +39,7 @@ class ConfigStore(Protocol):
     def upsert_query(self, row: dict) -> dict: ...
     def patch_query(self, name: str, patch: dict) -> dict: ...
     def deactivate_query(self, name: str) -> None: ...
+    def delete_query(self, name: str) -> None: ...
 
     # ------------------------------------------------------------------
     # schedules / runs

@@ -1,35 +1,28 @@
-<div class="page">
-  <div class="page-header">
-    <h1>Ejecutar Query</h1>
+<div class="page">  <div class="page-header">
+    <div>
+      <h1>Ejecutar Query</h1>
+      <p class="subtitle">Seleccioná una consulta guardada, ejecutala y exportá los resultados.</p>
+    </div>
   </div>
 
-  <div class="controls-card">
-    <p-select
-      [options]="groupedQueries()"
-      [group]="true"
-      optionGroupLabel="label"
-      optionGroupChildren="items"
-      [(ngModel)]="selected"
-      (onChange)="result.set(null)"
-      optionLabel="name"
-      placeholder="Seleccioná un query..."
-      [filter]="true"
-      filterBy="name,description"
-      styleClass="query-select"
-    >
-      <ng-template #selectedItem let-q>
-        <div class="select-item">
-          <span>{{ q.name }}</span>
-          <small>{{ q.description }}</small>
-        </div>
-      </ng-template>
-      <ng-template #item let-q>
-        <div class="select-item">
-          <span>{{ q.name }}</span>
-          <small>{{ q.model }}</small>
-        </div>
-      </ng-template>
-    </p-select>
+  <div class="page-card controls-card">
+    <div class="query-field">
+      <label>Query seleccionado</label>
+      @if (selected()) {
+        <button class="query-selector query-selector--selected" (click)="openQuerySelector()">
+          <div class="query-selector-info">
+            <span class="query-selector-name">{{ selected()!.name }}</span>
+            <span class="query-selector-meta">{{ selected()!.description || selected()!.model }}</span>
+          </div>
+          <i class="pi pi-pencil"></i>
+        </button>
+      } @else {
+        <button class="query-selector" (click)="openQuerySelector()">
+          <i class="pi pi-search"></i>
+          <span>Seleccioná un query...</span>
+        </button>
+      }
+    </div>
 
     <p-button
       label="Ejecutar"
@@ -54,20 +47,22 @@
   </div>
 
   @if (result()) {
-    <div class="result-bar">
-      <div class="result-meta">
-        <span class="result-name">{{ result()!.query }}</span>
-        <p-tag [value]="result()!.total + ' registros'" severity="info" />
-        <p-tag [value]="activeColumns().length + ' / ' + allColumns().length + ' cols'" severity="secondary" />
+    <div class="page-card">
+      <div class="result-bar">
+        <div class="result-meta">
+          <span class="result-name">{{ result()!.query }}</span>
+          <p-tag [value]="result()!.total + ' registros'" severity="info" />
+          <p-tag [value]="activeColumns().length + ' / ' + allColumns().length + ' cols'" severity="secondary" />
+        </div>
+        <p-splitbutton
+          label="Exportar"
+          icon="pi pi-download"
+          [model]="exportItems()"
+          severity="secondary"
+          [disabled]="activeColumns().length === 0"
+          (onClick)="download('csv')"
+        />
       </div>
-      <p-splitbutton
-        label="Exportar"
-        icon="pi pi-download"
-        [model]="exportItems()"
-        severity="secondary"
-        [disabled]="activeColumns().length === 0"
-        (onClick)="download('csv')"
-      />
     </div>
 
     <p-dialog
@@ -289,76 +284,153 @@
       </ng-template>
     </p-dialog>
 
-    <div class="col-selector">
-      <div class="col-selector-header">
-        <span>Columnas a exportar</span>
-        <p-button [label]="allChecked() ? 'Deseleccionar todo' : 'Seleccionar todo'" [text]="true" size="small" (onClick)="toggleAll()" />
-      </div>
-      <div class="col-chips">
-        @for (col of allColumns(); track col) {
-          <div class="col-chip" [class.active]="isChecked(col)" (click)="toggleColumn(col)">
-            {{ col }}
-          </div>
-        }
+    <div class="page-card">
+      <div class="col-selector">
+        <div class="col-selector-header">
+          <span>Columnas a exportar</span>
+          <p-button [label]="allChecked() ? 'Deseleccionar todo' : 'Seleccionar todo'" [text]="true" size="small" (onClick)="toggleAll()" />
+        </div>
+        <div class="col-chips">
+          @for (col of allColumns(); track col) {
+            <div class="col-chip" [class.active]="isChecked(col)" (click)="toggleColumn(col)">
+              {{ col }}
+            </div>
+          }
+        </div>
       </div>
     </div>
 
     @if (result()!.data.length === 0) {
       <p class="muted">Sin resultados.</p>
     } @else {
-      <div class="table-toolbar">
-        <span class="table-toolbar-hint">
-          <i class="pi pi-filter"></i>
-          Filtros visuales por columna — no afectan la exportación ni el envío a BigQuery
-        </span>
-        @if (hasActiveFilters()) {
-          <p-button
-            label="Limpiar filtros"
-            icon="pi pi-filter-slash"
-            [text]="true"
-            size="small"
-            (onClick)="clearColumnFilters(dt)"
-          />
-        }
+      <div class="page-card">
+        <div class="table-toolbar">
+          <span class="table-toolbar-hint">
+            <i class="pi pi-filter"></i>
+            Filtros visuales por columna — no afectan la exportación ni el envío a BigQuery
+          </span>
+          @if (hasActiveFilters()) {
+            <p-button
+              label="Limpiar filtros"
+              icon="pi pi-filter-slash"
+              [text]="true"
+              size="small"
+              (onClick)="clearColumnFilters(dt)"
+            />
+          }
+        </div>
+        <p-table
+          #dt
+          [value]="result()!.data"
+          [paginator]="true"
+          [rows]="20"
+          [rowsPerPageOptions]="[20, 50, 100]"
+          [scrollable]="true"
+          styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+        >
+          <ng-template #header>
+            <tr>
+              @for (col of activeColumns(); track col) {
+                <th>{{ col }}</th>
+              }
+            </tr>
+            <tr class="col-filter-row">
+              @for (col of activeColumns(); track col) {
+                <th>
+                  <input
+                    pInputText
+                    type="text"
+                    class="col-filter-input"
+                    [value]="columnFilters()[col] ?? ''"
+                    (input)="onColumnFilter(dt, col, $any($event.target).value)"
+                    placeholder="Filtrar..."
+                  />
+                </th>
+              }
+            </tr>
+          </ng-template>
+          <ng-template #body let-row>
+            <tr>
+              @for (col of activeColumns(); track col) {
+                <td>{{ cellValue(row, col) }}</td>
+              }
+            </tr>
+          </ng-template>
+        </p-table>
       </div>
-      <p-table
-        #dt
-        [value]="result()!.data"
-        [paginator]="true"
-        [rows]="20"
-        [rowsPerPageOptions]="[20, 50, 100]"
-        [scrollable]="true"
-        styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
-      >
-        <ng-template #header>
-          <tr>
-            @for (col of activeColumns(); track col) {
-              <th>{{ col }}</th>
-            }
-          </tr>
-          <tr class="col-filter-row">
-            @for (col of activeColumns(); track col) {
-              <th>
-                <input
-                  pInputText
-                  type="text"
-                  class="col-filter-input"
-                  [value]="columnFilters()[col] ?? ''"
-                  (input)="onColumnFilter(dt, col, $any($event.target).value)"
-                  placeholder="Filtrar..."
-                />
-              </th>
-            }
-          </tr>
-        </ng-template>
-        <ng-template #body let-row>
-          <tr>
-            @for (col of activeColumns(); track col) {
-              <td>{{ cellValue(row, col) }}</td>
-            }
-          </tr>
-        </ng-template>
-      </p-table>
     }
   }
-</div>
+
+  <p-dialog
+    [(visible)]="querySelectDialogVisible"
+    header="Seleccionar query"
+    [modal]="true"
+    [dismissableMask]="true"
+    [style]="{ width: '960px', maxWidth: '98vw' }"
+    styleClass="query-select-dialog"
+  >
+    <div class="query-dialog-search">
+      <span class="p-input-icon-left">
+        <i class="pi pi-search"></i>
+        <input
+          pInputText
+          type="text"
+          [(ngModel)]="querySearch"
+          (input)="querySearch.set($any($event.target).value)"
+          placeholder="Buscar por nombre, descripción, modelo o categoría..."
+          class="query-dialog-input"
+        />
+      </span>
+    </div>
+
+    <p-table
+      [value]="filteredQueriesForDialog()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 20, 50]"
+      styleClass="p-datatable-striped p-datatable-gridlines query-dialog-table"
+    >
+      <ng-template #header>
+        <tr>
+          <th>Nombre</th>
+          <th>Descripción</th>
+          <th>Categoría</th>
+          <th class="col-action"></th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-q>
+        <tr [class.selected-row]="selected()?.name === q.name" (dblclick)="selectQuery(q)" style="cursor: pointer;">
+          <td><code>{{ q.name }}</code></td>
+          <td class="desc-cell">{{ q.description || '—' }}</td>
+          <td>
+            <p-tag
+              [value]="q.category?.name || 'Sin categoría'"
+              [severity]="q.category ? 'info' : 'secondary'"
+            />
+          </td>
+          <td class="col-action">
+            <p-button
+              label="Seleccionar"
+              icon="pi pi-check"
+              size="small"
+              (onClick)="selectQuery(q); $event.stopPropagation()"
+            />
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="4" class="empty-msg">No se encontraron queries.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+
+    <ng-template #footer>
+      <p-button
+        label="Cancelar"
+        [text]="true"
+        (onClick)="querySelectDialogVisible.set(false)"
+      />
+    </ng-template>
+  </p-dialog>
+  </div>

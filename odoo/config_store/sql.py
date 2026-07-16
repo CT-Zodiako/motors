@@ -90,10 +90,12 @@ VALUES (source.id, source.name, source.description, source.model, source.method,
 SQL_UPDATE_QUERY = lambda: f"""
 UPDATE `{_t('odoo_queries')}`
 SET description = @description, domain = PARSE_JSON(@domain), fields = PARSE_JSON(@fields),
-    limit_val = @limit_val, category_id = @category_id
+    limit_val = @limit_val, category_id = @category_id, active = @active
 WHERE name = @name
 """
 SQL_DEACTIVATE_QUERY = lambda: f"UPDATE `{_t('odoo_queries')}` SET active = FALSE WHERE name = @name"
+SQL_DELETE_QUERY = lambda: f"DELETE FROM `{_t('odoo_queries')}` WHERE name = @name"
+SQL_DELETE_DESTINATIONS_BY_QUERY = lambda: f"DELETE FROM `{_t('query_destinations')}` WHERE query_name = @query_name"
 # ---------------------------------------------------------------------------
 # Schedules
 # ---------------------------------------------------------------------------

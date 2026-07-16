@@ -1,105 +1,136 @@
 <div class="page">
   <div class="page-header">
-    <h1>Queries registrados</h1>
+    <div>
+      <h1>Queries registrados</h1>
+      <p class="subtitle">Gestioná las consultas guardadas para exportar a BigQuery.</p>
+    </div>
     <p-button label="Actualizar" icon="pi pi-refresh" severity="secondary" (onClick)="load()" />
   </div>
 
-  <p-table
-    [value]="sortedQueries()"
-    [loading]="loading()"
-    [paginator]="true"
-    [rows]="10"
-    [rowsPerPageOptions]="[10, 25, 50]"
-    [globalFilterFields]="['name', 'description', 'model', 'category.name']"
-    groupRowsBy="category.name"
-    rowGroupMode="subheader"
-    styleClass="p-datatable-striped p-datatable-gridlines"
-    #dt
-  >
-    <ng-template #caption>
-      <div class="table-caption">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search"></i>
-          <input pInputText type="text" placeholder="Buscar..." (input)="dt.filterGlobal(($any($event.target)).value, 'contains')" />
-        </span>
-        <p-tag [value]="queries().length + ' queries'" severity="secondary" />
-      </div>
-    </ng-template>
+  <div class="page-card">
+    <p-table
+      [value]="filteredQueries()"
+      [loading]="loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      [globalFilterFields]="['name', 'description', 'model']"
+      [groupRowsBy]="selectedCategoryFilter() === null ? 'category.name' : undefined"
+      [rowGroupMode]="selectedCategoryFilter() === null ? 'subheader' : undefined"
+      styleClass="p-datatable-striped p-datatable-gridlines"
+      #dt
+    >
+      <ng-template #caption>
+        <div class="table-toolbar">
+          <div class="toolbar-filters">
+            <div class="search-field">
+              <label for="query-search">Buscar</label>
+              <span class="p-input-icon-left">
+                <i class="pi pi-search"></i>
+                <input
+                  id="query-search"
+                  pInputText
+                  type="text"
+                  class="search-input"
+                  placeholder="Nombre, descripción o modelo..."
+                  (input)="dt.filterGlobal(($any($event.target)).value, 'contains')"
+                />
+              </span>
+            </div>
 
-    <ng-template #groupheader let-row>
-      <tr class="category-group-row">
-        <td colspan="8">
-          <span class="category-group-label">{{ row.category?.name ?? 'Sin categoría' }}</span>
-          <p-tag [value]="row.category ? '' : 'sin asignar'" severity="secondary" />
-        </td>
-      </tr>
-    </ng-template>
+            <p-select
+              [options]="categoryFilterOptions()"
+              [ngModel]="selectedCategoryFilter()"
+              (ngModelChange)="selectedCategoryFilter.set($event)"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Filtrar por categoría"
+              styleClass="category-filter"
+              appendTo="body"
+            />
+          </div>
 
-    <ng-template #header>
-      <tr>
-        <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
-        <th>Descripción</th>
-        <th pSortableColumn="model">Modelo <p-sortIcon field="model" /></th>
-        <th>Método</th>
-        <th pSortableColumn="limit_val">Límite <p-sortIcon field="limit_val" /></th>
-        <th>Categoría</th>
-        <th>Estado</th>
-        <th></th>
-      </tr>
-    </ng-template>
+          <p-tag [value]="filteredQueries().length + ' queries'" severity="secondary" />
+        </div>
+      </ng-template>
 
-    <ng-template #body let-q>
-      <tr>
-        <td><code>{{ q.name }}</code></td>
-        <td class="desc">{{ q.description }}</td>
-        <td><code>{{ q.model }}</code></td>
-        <td>{{ q.method }}</td>
-        <td>{{ q.limit_val }}</td>
-        <td>
-          <p-select
-            [options]="categories()"
-            [ngModel]="q.category?.id"
-            (ngModelChange)="onCategoryChange(q, $event)"
-            optionLabel="name"
-            optionValue="id"
-            size="small"
-            appendTo="body"
-            styleClass="category-cell-select"
-          />
-        </td>
-        <td>
-          <p-tag
-            [value]="q.active ? 'Activo' : 'Inactivo'"
-            [severity]="q.active ? 'success' : 'danger'"
-          />
-        </td>
-        <td>
-          @if (q.active) {
-            <div class="flex gap-2">
+      <ng-template #groupheader let-row>
+        <tr class="category-group-row">
+          <td colspan="8">
+            <span class="category-group-label">{{ row.category?.name ?? 'Sin categoría' }}</span>
+            <p-tag [value]="row.category ? '' : 'sin asignar'" severity="secondary" />
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="name">Nombre <p-sortIcon field="name" /></th>
+          <th>Descripción</th>
+          <th pSortableColumn="model">Modelo <p-sortIcon field="model" /></th>
+          <th>Método</th>
+          <th pSortableColumn="limit_val">Límite <p-sortIcon field="limit_val" /></th>
+          <th>Categoría</th>
+          <th>Estado</th>
+          <th class="col-options">Opciones</th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-q>
+        <tr>
+          <td><code>{{ q.name }}</code></td>
+          <td class="desc">{{ q.description }}</td>
+          <td><code>{{ q.model }}</code></td>
+          <td>{{ q.method }}</td>
+          <td>{{ q.limit_val }}</td>
+          <td>
+            <p-tag
+              [value]="q.category?.name ?? 'Sin categoría'"
+              [severity]="q.category ? 'info' : 'secondary'"
+            />
+          </td>
+          <td>
+            <p-toggleswitch
+              [ngModel]="q.active"
+              (ngModelChange)="toggleActive(q, $event)"
+              [pTooltip]="q.active ? 'Activo' : 'Inactivo'"
+              tooltipPosition="top"
+            />
+          </td>
+          <td class="col-options">
+            <div class="row-actions">
               <p-button
-                label="Editar"
+                icon="pi pi-pencil"
                 severity="info"
-                size="small"
-                [outlined]="true"
+                [text]="true"
+                [pTooltip]="'Editar'"
+                tooltipPosition="top"
                 (onClick)="editQuery(q)"
               />
               <p-button
-                label="Desactivar"
+                icon="pi pi-trash"
                 severity="danger"
-                size="small"
-                [outlined]="true"
-                (onClick)="deactivate(q.name)"
+                [text]="true"
+                [pTooltip]="'Borrar'"
+                tooltipPosition="top"
+                (onClick)="deleteQuery(q)"
               />
             </div>
-          }
-        </td>
-      </tr>
-    </ng-template>
+          </td>
+        </tr>
+      </ng-template>
 
-    <ng-template #emptymessage>
-      <tr>
-        <td colspan="8" class="empty-msg">No hay queries registrados.</td>
-      </tr>
-    </ng-template>
-  </p-table>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="8" class="empty-msg">
+            @if (selectedCategoryFilter() !== null) {
+              No hay queries para esta categoría.
+            } @else {
+              No hay queries registrados.
+            }
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
 </div>

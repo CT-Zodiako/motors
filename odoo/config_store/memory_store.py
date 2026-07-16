@@ -202,6 +202,17 @@ class InMemoryConfigStore:
         self._cache.invalidate_queries()
         self._cache.invalidate_destinations()
 
+    def delete_query(self, name: str) -> None:
+        if self.get_query(name) is None:
+            raise NotFoundError(f"Query {name} not found")
+        self._data["odoo_queries"] = [r for r in self._data["odoo_queries"] if r["name"] != name]
+        # Cascade: delete destinations
+        self._data["query_destinations"] = [
+            r for r in self._data["query_destinations"] if r["query_name"] != name
+        ]
+        self._cache.invalidate_queries()
+        self._cache.invalidate_destinations()
+
     # ------------------------------------------------------------------
     # schedules
     # ------------------------------------------------------------------

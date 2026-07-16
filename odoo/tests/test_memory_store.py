@@ -190,17 +190,17 @@ class TestDestinations:
         assert d["query_name"] == "clientes_activos"
 
     def test_mark_stale_and_ok(self, store):
-        store.upsert_destination({
+        d = store.upsert_destination({
             "query_name": "clientes_activos",
             "dataset_id": "ds",
             "table_id": "tbl",
             "origin": "manual",
         })
-        store.mark_destination_stale("clientes_activos", "ds", "tbl", "oops")
+        store.mark_destination_stale(d["id"], "oops")
         d = store.list_destinations()[0]
         assert d["stale"] is True
         assert d["last_error"] == "oops"
-        store.mark_destination_ok("clientes_activos", "ds", "tbl", schema={"a": "STRING"})
+        store.mark_destination_ok(d["id"], schema={"a": "STRING"})
         d = store.list_destinations()[0]
         assert d["stale"] is False
         assert d["last_schema"] == {"a": "STRING"}
@@ -305,7 +305,8 @@ class TestSeedDestinationGuard:
             "interval_hours": 1,
         })
         store.seed_destinations_from_schedules()
-        store.mark_destination_stale("clientes_activos", "d1", "t1", "schema drift")
+        d = [x for x in store.list_destinations() if x["dataset_id"] == "d1"][0]
+        store.mark_destination_stale(d["id"], "schema drift")
         store.seed_destinations_from_schedules()
         d = [x for x in store.list_destinations() if x["dataset_id"] == "d1"][0]
         assert d["stale"] is True
@@ -404,13 +405,13 @@ class TestCacheInvalidationSchedulesRunsDestinations:
         assert finished["status"] == "success"
 
     def test_cache_invalidation_on_destination_mark_stale(self, store):
-        store.upsert_destination({
+        d = store.upsert_destination({
             "query_name": "clientes_activos",
             "dataset_id": "ds",
             "table_id": "tbl",
             "origin": "manual",
         })
         store.list_destinations()  # warm cache
-        store.mark_destination_stale("clientes_activos", "ds", "tbl", "err")
+        store.mark_destination_stale(d["id"], "err")
         d = store.list_destinations()[0]
         assert d["stale"] is True
