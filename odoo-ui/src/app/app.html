@@ -16,7 +16,7 @@
 
   <main class="content">
     @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
-    @if (activeTab() === 'create')   { <app-query-create /> }
+    @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
     @if (activeTab() === 'runner')   { <app-query-runner /> }
     
     @if (activeTab() === 'upload') { <app-file-upload /> }
