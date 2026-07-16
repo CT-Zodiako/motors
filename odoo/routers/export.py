@@ -8,20 +8,17 @@ import openpyxl
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 
-from db import query as pg_query
+from config_store import get_store
 from odoo_client import execute as odoo_execute
 
 router = APIRouter(prefix="/export", tags=["export"])
 
 
 def _fetch_data(name: str) -> tuple[dict, list[dict]]:
-    rows = pg_query(
-        "SELECT * FROM odoo_queries WHERE name = %s AND active = TRUE", (name,)
-    )
-    if not rows:
+    registered = get_store().get_query(name)
+    if registered is None or not registered.get("active", True):
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found or inactive")
 
-    registered = rows[0]
     data = odoo_execute(
         registered["model"],
         registered["method"],
@@ -40,6 +37,8 @@ def _cell(value: object) -> str:
 
 
 def _infer_pg_type(value: object) -> str:
+    if value is None:
+        return "TEXT"
     if isinstance(value, bool):
         return "BOOLEAN"
     if isinstance(value, int):
@@ -52,6 +51,8 @@ def _infer_pg_type(value: object) -> str:
 
 
 def _infer_oracle_type(value: object) -> str:
+    if value is None:
+        return "VARCHAR2(4000)"
     if isinstance(value, bool):
         return "NUMBER(1)"
     if isinstance(value, int):
@@ -188,7 +189,7 @@ def export_excel(name: str, columns: str | None = Query(None)):
     )
 
 
-# ─── SQL ──────────────────────────────────────────────────────────────────────
+# ─── SQL ────────────────────────────────────────────────────────────────────
 
 @router.get("/sql/{name}")
 def export_sql(
@@ -256,3 +257,4 @@ def sql_preview(payload: dict = Body(...)) -> dict:
         lines.append(f"INSERT INTO {table} ({col_list}) VALUES ({vals});")
 
     return {"sql": "\n".join(lines)}
+

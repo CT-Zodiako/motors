@@ -1,12 +1,8 @@
 """Shared fixtures for the odoo backend test suite.
 
-- Adds the backend root (odoo/) to sys.path so `import db`, `from main import app` work.
+- Adds the backend root (odoo/) to sys.path so `from main import app` works.
 - `client`: FastAPI TestClient without lifespan (avoids starting the scheduler).
-- `cleanup`: autouse fixture that removes any row created by tests (names prefixed `t_`).
-  Test data NEVER touches seed rows.
 - `store`: fresh InMemoryConfigStore per test, injected via set_store(...).
-  WU2: categories/catalog routers consume the store; PG fixtures remain alive
-  for propagation/schedules/destinations tests (WU3).
 """
 import os
 import sys
@@ -18,34 +14,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import app  # noqa: E402
 
-TEST_PREFIX = "t_"
-
-
-def _pg_available() -> bool:
-    """Best-effort check: can we connect to the configured PostgreSQL?"""
-    try:
-        from db import query as pg_query
-        pg_query("SELECT 1")
-        return True
-    except Exception:
-        return False
-
-
-@pytest.fixture(scope="session", autouse=True)
-def migrated_db():
-    """Guarantee the schema (incl. query-categories migration) exists before any API test.
-
-    If PostgreSQL is not reachable, skip schema setup; tests that require PG will fail
-    deterministically downstream rather than here.
-    """
-    if _pg_available():
-        import init_db
-        init_db.init()
-    yield
-
 
 @pytest.fixture(scope="session")
-def client(migrated_db):
+def client():
     # Plain TestClient (no context manager): startup/shutdown events (scheduler) do NOT fire.
     return TestClient(app, raise_server_exceptions=False)
 
@@ -61,28 +32,4 @@ def store():
     seed_defaults(_store)
     set_store(_store)
     yield _store
-
-
-@pytest.fixture(autouse=True)
-def cleanup():
-    yield
-    if not _pg_available():
-        return
-    # FK order: queries reference categories, so delete queries first.
-    from db import execute as pg_execute
-    pg_execute("DELETE FROM odoo_queries WHERE name LIKE 't\\_%' ESCAPE '\\'")
-    pg_execute(
-        "DELETE FROM query_categories WHERE name LIKE 't\\_%' ESCAPE '\\'"
-        # table may not exist yet in early RED runs; guard below
-    ) if _table_exists("query_categories") else None
-
-
-def _table_exists(table: str) -> bool:
-    from db import query as pg_query
-
-    rows = pg_query(
-        "SELECT 1 AS ok FROM information_schema.tables WHERE table_name = %s", (table,)
-    )
-    return bool(rows)
-
 
