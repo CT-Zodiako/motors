@@ -244,6 +244,30 @@ export class QueryRunner implements OnInit {
     this.bigQueryScheduleDayOfMonth = 1;
     this.bigQueryScheduleIntervalHours = 1;
     this.loadBigQueryDatasets();
+    this.loadDestinationForQuery();
+  }
+
+  private loadDestinationForQuery() {
+    const q = this.selected();
+    if (!q) return;
+    this.svc.getDestination(q.name).subscribe({
+      next: (dest) => {
+        if (!dest) return;
+        const dataset = this.bigQueryDatasets().find(d => d.id === dest.dataset_id);
+        if (!dataset) return;
+        this.selectedBigQueryDataset = dataset;
+        this.onBigQueryDatasetChange();
+        const exists = this.bigQueryTables().some(t => t.id === dest.table_id);
+        if (exists) {
+          this.selectedBigQueryTableId = dest.table_id;
+          this.bigQueryCreateNewTable = false;
+        } else {
+          this.bigQueryCreateNewTable = true;
+          this.bigQueryTableName = dest.table_id;
+        }
+      },
+      error: () => {},
+    });
   }
 
   closeBigQueryDialog() {
