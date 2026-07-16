@@ -93,7 +93,7 @@ def propagate_query_edit(query: dict) -> dict:
                 rows,
                 schema,
             )
-            query_registry.mark_ok(dest["id"], schema)
+            query_registry.mark_ok(dest["id"], [{"name": f.name, "type": f.field_type} for f in schema])
             report_destinations.append(
                 {
                     "dataset_id": dest["dataset_id"],

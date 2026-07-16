@@ -78,7 +78,11 @@
         <div class="step-content">
           <div class="step-header">
             <p class="hint">Seleccioná los datos que va a mostrar esta consulta.</p>
-            <p-button label="← Cambiar modelo" [text]="true" size="small" (onClick)="goTo(0)" />
+            @if (!isEditMode()) {
+              <p-button label="← Cambiar modelo" [text]="true" size="small" (onClick)="goTo(0)" />
+            } @else {
+              <p class="muted">El modelo no se puede cambiar en modo edición.</p>
+            }
           </div>
 
           @if (loadingFields()) {
@@ -251,7 +255,7 @@
       <ng-template #content>
         <div class="step-content">
           <div class="step-header">
-            <p class="hint">Dale un nombre a esta consulta para identificarla.</p>
+            <p class="hint">{{ isEditMode() ? "Revisá los cambios y guardá la consulta." : "Dale un nombre a esta consulta para identificarla." }}</p>
             <p-button label="← Volver" [text]="true" size="small" (onClick)="goTo(2)" />
           </div>
 
@@ -298,7 +302,7 @@
               <small>Dejá el campo vacío para traer todos los registros, o ingresá un límite específico.</small>
             </div>
             <p-button
-              label="Crear consulta"
+              [label]="isEditMode() ? 'Guardar cambios' : 'Crear consulta'"
               icon="pi pi-check"
               [loading]="saving()"
               [disabled]="!queryName()"
@@ -321,35 +325,60 @@
     header="Resultado de la propagación"
     [modal]="true"
     [style]="{ width: '500px' }"
+    [closable]="false"
   >
     @if (propagationResult(); as result) {
       <div class="propagation-summary">
-        <p>Destinos registrados: <strong>{{ result.total }}</strong></p>
-        <p>Actualizados: <strong class="text-green-500">{{ result.ok }}</strong></p>
-        <p>Fallidos: <strong class="text-red-500">{{ result.failed }}</strong></p>
+        <div class="propagation-overview">
+          <div class="overview-item">
+            <span class="overview-label">Destinos registrados</span>
+            <span class="overview-value">{{ result.total }}</span>
+          </div>
+          <div class="overview-item success">
+            <span class="overview-label">Actualizados</span>
+            <span class="overview-value">{{ result.ok }}</span>
+          </div>
+          <div class="overview-item error">
+            <span class="overview-label">Fallidos</span>
+            <span class="overview-value">{{ result.failed }}</span>
+          </div>
+        </div>
 
         @if (result.destinations?.length > 0) {
-          <div class="destinations-list">
-            @for (dest of result.destinations; track dest.dataset_id + dest.table_id) {
-              <div class="destination-item">
-                <span class="status-badge" [class.ok]="dest.status === 'ok'" [class.failed]="dest.status === 'failed'" [class.empty]="dest.status === 'empty'">
-                  {{ dest.status === 'ok' ? '✓' : dest.status === 'failed' ? '✗' : '⚠' }}
-                </span>
-                <span>{{ dest.dataset_id }}.{{ dest.table_id }}</span>
-                @if (dest.error) {
-                  <span class="error-text">{{ dest.error }}</span>
-                }
-              </div>
-            }
+          <div class="destinations-section">
+            <p class="section-title">Detalle por destino</p>
+            <div class="destinations-list">
+              @for (dest of result.destinations; track dest.dataset_id + dest.table_id) {
+                <div class="destination-item" [class.ok]="dest.status === 'ok'" [class.failed]="dest.status === 'failed'" [class.empty]="dest.status === 'empty'">
+                  <span class="status-icon">
+                    {{ dest.status === 'ok' ? '✓' : dest.status === 'failed' ? '✗' : '⚠' }}
+                  </span>
+                  <div class="destination-info">
+                    <span class="destination-id">{{ dest.dataset_id }}.{{ dest.table_id }}</span>
+                    @if (dest.error) {
+                      <span class="error-text">{{ dest.error }}</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
           </div>
         }
 
         @if (result.failed > 0) {
-          <p class="retry-note">Los destinos fallidos se reintentarán en la próxima ejecución programada.</p>
-
+          <div class="retry-note">
+            <i class="pi pi-info-circle"></i>
+            <span>Los destinos fallidos se reintentarán en la próxima ejecución programada.</span>
+          </div>
         }
+      </div>
 
-            <p class="muted self-register-note">Los destinos cargados manualmente antes de esta versión aún no están registrados: se re-register automáticamente en su próxima carga manual.</p>
+      <div class="dialog-actions">
+        <p-button
+          label="Aceptar"
+          icon="pi pi-check"
+          (onClick)="showPropagationDialog.set(false); onNavigateToTab && onNavigateToTab('list')"
+        />
       </div>
     }
   </p-dialog>
