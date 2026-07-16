@@ -87,6 +87,26 @@ describe('QueryCreate (editable-queries edit mode)', () => {
     expect(component.filters()[0]).toEqual({ field: 'name', operator: 'ilike', value: 'Acme' });
   });
 
+  it('edit mode treats stored limit_val 0 as blank (all records)', () => {
+    const noLimitQuery = { ...mockQuery, limit_val: 0 };
+    editState.beginEdit(noLimitQuery);
+    component.ngOnInit();
+    expect(component.limitVal()).toBeNull();
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
+      fields: {
+        name: { string: 'Nombre', type: 'char' },
+        amount: { string: 'Monto', type: 'float' },
+      },
+    });
+    component.save();
+    const req = http.expectOne('http://localhost:8000/queries/sales');
+    expect(req.request.body.limit_val).toBe(0);
+    req.flush({
+      query: noLimitQuery,
+      propagation: { total: 0, ok: 0, failed: 0, destinations: [] },
+    });
+  });
+
   it('save in edit mode calls update() not create()', () => {
     editState.beginEdit(mockQuery);
     component.ngOnInit();
@@ -402,5 +422,46 @@ describe('QueryCreate (selected model context banner)', () => {
 
     expect(banner()).toBeTruthy();
     expect(banner()!.querySelector('.model-context-code')!.textContent).toContain('sale.order');
+  });
+});
+describe('QueryCreate (create mode limit default)', () => {
+  let http: HttpTestingController;
+  let component: QueryCreate;
+  let fixture: ComponentFixture<QueryCreate>;
+
+  beforeEach(() => {
+    const s = setup();
+    http = s.http;
+    component = s.component;
+    fixture = s.fixture;
+  });
+
+  afterEach(() => {
+    http.match(() => true).forEach((r) => {
+      if (r.request.url.includes('/explore/models')) r.flush({ total: 0, models: [] });
+      else if (r.request.url.includes('/categories/')) r.flush([]);
+      else if (r.request.url.includes('/explore/fields/')) r.flush({ fields: {} });
+      else r.flush({});
+    });
+    http.verify();
+    TestBed.resetTestingModule();
+  });
+
+  it('blank limit field is sent as 0 (all records) when creating a query', () => {
+    component.selectModel({ name: 'Sale Order', model: 'sale.order' });
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
+      fields: {
+        name: { string: 'Nombre', type: 'char' },
+      },
+    });
+    fixture.detectChanges();
+    expect(component.limitVal()).toBeNull();
+    component.queryName.set('test_query');
+    component.toggleField('name');
+    component.save();
+    const req = http.expectOne('http://localhost:8000/queries/');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body.limit_val).toBe(0);
+    req.flush({ registered: 'test_query' });
   });
 });
