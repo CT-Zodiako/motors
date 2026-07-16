@@ -221,6 +221,11 @@ class BigQueryConfigStore:
             cats = self._query(sql.SQL_GET_CATEGORY_BY_ID(), [_int64_param("id", cat_id)])
             if not cats:
                 raise ValidationError(f"Category id {cat_id} does not exist")
+        # Ensure id and created_at are set for BQ MERGE
+        if "id" not in row:
+            row["id"] = self._next_id()
+        if "created_at" not in row:
+            row["created_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         # MERGE upsert
         params = _build_params("odoo_queries", row)
         self._query(sql.SQL_MERGE_QUERY(), params)
@@ -383,6 +388,10 @@ class BigQueryConfigStore:
         return decoded
 
     def upsert_destination(self, dest: dict) -> dict:
+        if "id" not in dest:
+            dest["id"] = self._next_id()
+        if "created_at" not in dest:
+            dest["created_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
         params = _build_params("query_destinations", dest)
         self._query(sql.SQL_MERGE_DESTINATION(), params)
         self._cache.invalidate_destinations()
