@@ -98,7 +98,7 @@
                 class="field-search"
               />
               <span class="muted">{{ checkedFields().size }} / {{ availableFields().length }} seleccionados</span>
-              <p-button [label]="allFieldsChecked() ? 'Deseleccionar' : 'Seleccionar visibles'" [text]="true" size="small" (onClick)="toggleAllFields()" />
+                  <p-button [label]="allFieldsChecked() ? 'Desmarcar todos' : 'Seleccionar todos'" [text]="true" size="small" (onClick)="toggleAllFields()" />
             </div>
 
             <div class="fields-grid">
