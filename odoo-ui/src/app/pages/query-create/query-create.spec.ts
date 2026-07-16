@@ -315,6 +315,32 @@ describe('QueryCreate (field card metadata)', () => {
     expect(amount.querySelector('.field-relation')).toBeNull();
     expect(amount.getAttribute('title')).toBeNull();
   });
+
+  it('toggleAllFields selects all available fields and deselects them when clicked again', () => {
+    selectModelAndFlushFields();
+    expect(component.checkedFields().size).toBe(0);
+
+    component.toggleAllFields();
+    expect(component.checkedFields().size).toBe(component.availableFields().length);
+    expect(component.allFieldsChecked()).toBe(true);
+
+    component.toggleAllFields();
+    expect(component.checkedFields().size).toBe(0);
+    expect(component.allFieldsChecked()).toBe(false);
+  });
+
+  it('toggleAllFields ignores the field search filter and always toggles all model fields', () => {
+    selectModelAndFlushFields();
+    component.fieldSearch.set('Cliente');
+    fixture.detectChanges();
+    expect(component.filteredFields().length).toBe(1);
+
+    component.toggleAllFields();
+    expect(component.checkedFields().size).toBe(component.availableFields().length);
+    expect(component.checkedFields().has('partner_id')).toBe(true);
+    expect(component.checkedFields().has('amount')).toBe(true);
+    expect(component.checkedFields().has('name')).toBe(true);
+  });
 });
 
 describe('QueryCreate (selected model context banner)', () => {

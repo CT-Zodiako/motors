@@ -127,8 +127,8 @@ export class QueryCreate implements OnInit {
   );
 
   allFieldsChecked = computed(() =>
-    this.filteredFields().length > 0 &&
-    this.filteredFields().every(f => this.checkedFields().has(f.key))
+    this.availableFields().length > 0 &&
+    this.availableFields().every(f => this.checkedFields().has(f.key))
   );
 
   getFieldType(key: string): string {
@@ -297,10 +297,10 @@ export class QueryCreate implements OnInit {
   }
 
   toggleAllFields() {
-    const visible = this.filteredFields().map(f => f.key);
+    const all = this.availableFields().map(f => f.key);
     const next = new Set(this.checkedFields());
-    if (this.allFieldsChecked()) { visible.forEach(k => next.delete(k)); }
-    else { visible.forEach(k => next.add(k)); }
+    if (this.allFieldsChecked()) { all.forEach(k => next.delete(k)); }
+    else { all.forEach(k => next.add(k)); }
     this.checkedFields.set(next);
   }
 
