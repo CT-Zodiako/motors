@@ -80,7 +80,7 @@ class InMemoryConfigStore:
 
     def create_category(self, name: str, description: str | None = None) -> dict:
         if any(r["name"] == name for r in self._data["query_categories"]):
-            raise ConflictError(f"Category name already exists: {name}")
+            raise ConflictError("Category name already exists")
         row = {
             "id": self._new_id(),
             "name": name,
@@ -92,13 +92,15 @@ class InMemoryConfigStore:
         return codecs.decode_row("query_categories", row)
 
     def delete_category(self, category_id: int) -> None:
-        gen = [r for r in self._data["query_categories"] if r["id"] == category_id and r["name"] == "General"]
-        if gen:
-            raise ConflictError("Cannot delete the General category")
-        # Ref-count check
+        cat = self._find_category_by_id(category_id)
+        if cat is None:
+            raise NotFoundError(f"Category {category_id} not found")
+        if cat["name"] == "General":
+            raise ConflictError("The default category 'General' cannot be deleted")
+        # Ref-count check (includes inactive queries per test contract)
         refs = [r for r in self._data["odoo_queries"] if r.get("category_id") == category_id]
         if refs:
-            raise ConflictError("Category is referenced by queries")
+            raise ConflictError("Category still has queries; recategorize them first")
         self._data["query_categories"] = [r for r in self._data["query_categories"] if r["id"] != category_id]
         self._cache.invalidate_categories()
 
@@ -150,7 +152,13 @@ class InMemoryConfigStore:
         # Strip app-side fields before encoding
         clean_row = {k: v for k, v in row.items() if k in [c["name"] for c in codecs.TABLE_SCHEMAS["odoo_queries"]]}
         if existing:
-            # Update
+            # Update — preserve category_id if not provided in the update row
+            existing_decoded = codecs.decode_row("odoo_queries", existing[0])
+            if "category_id" not in clean_row or clean_row["category_id"] is None:
+                clean_row["category_id"] = existing_decoded.get("category_id")
+            # Preserve id and created_at on update
+            clean_row["id"] = existing_decoded["id"]
+            clean_row["created_at"] = existing_decoded["created_at"]
             encoded = codecs.encode_row("odoo_queries", clean_row)
             idx = self._data["odoo_queries"].index(existing[0])
             self._data["odoo_queries"][idx] = encoded
