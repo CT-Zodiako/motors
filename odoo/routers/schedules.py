@@ -4,6 +4,7 @@ from typing import Literal
 from datetime import datetime
 
 from config_store import get_store
+from query_registry import mark_other_destinations_stale, upsert_destination
 from routers.runner import _fetch_registered, fetch_query_rows
 from routers.bigquery import upload_to_bigquery, BigQueryUploadPayload
 
@@ -59,9 +60,9 @@ class ScheduleResponse(BaseModel):
     day_of_month: int | None
     interval_hours: int | None
     active: bool
-    last_run_at: datetime | None
-    last_run_status: str | None
-    last_run_message: str | None
+    last_run_at: datetime | None = None
+    last_run_status: str | None = None
+    last_run_message: str | None = None
     created_at: datetime
 
 
@@ -92,6 +93,8 @@ def create_schedule(payload: ScheduleCreate):
     payload_dict = payload.model_dump()
 
     schedule = get_store().create_schedule(payload_dict)
+    mark_other_destinations_stale(schedule["query_name"], schedule["dataset_id"], schedule["table_id"])
+    upsert_destination(schedule["query_name"], schedule["dataset_id"], schedule["table_id"], origin="schedule")
     _register_job(schedule)
     return schedule
 
@@ -120,6 +123,8 @@ def update_schedule(schedule_id: int, payload: ScheduleUpdate):
     _ensure_query_exists(merged["query_name"])
 
     schedule = get_store().update_schedule(schedule_id, merged)
+    mark_other_destinations_stale(schedule["query_name"], schedule["dataset_id"], schedule["table_id"])
+    upsert_destination(schedule["query_name"], schedule["dataset_id"], schedule["table_id"], origin="schedule")
     _register_job(schedule)
     return schedule
 

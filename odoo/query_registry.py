@@ -30,6 +30,24 @@ def seed_from_schedules():
     return get_store().seed_destinations_from_schedules()
 
 
+def get_destination(query_name):
+    """Return the active destination for a query, or the most recent stale one if no active exists."""
+    rows = list_destinations(query_name)
+    if not rows:
+        return None
+    active = [r for r in rows if not r.get("stale")]
+    if active:
+        return active[0]
+    return max(rows, key=lambda r: r.get("created_at") or "")
+
+
+def mark_other_destinations_stale(query_name, dataset_id, table_id):
+    """Mark every destination for query_name except (dataset_id, table_id) as stale."""
+    for dest in list_destinations(query_name):
+        if dest["dataset_id"] != dataset_id or dest["table_id"] != table_id:
+            mark_stale(dest["id"], error="Replaced by schedule destination")
+
+
 def upsert_destination(query_name, dataset_id, table_id, origin="manual"):
     return get_store().upsert_destination({
         "query_name": query_name,
