@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, FieldMeta, OdooQuery } from '../../services/odoo-queries';
 import { CategoriesService, QueryCategory } from '../../services/categories';
@@ -57,6 +57,8 @@ export class QueryCreate implements OnInit {
   private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
   private editState = inject(QueryEditStateService);
+
+  @Input() onNavigateToTab: ((tab: 'list' | 'create' | 'runner' | 'schedules' | 'upload') => void) | null = null;
 
   activeStep = signal(0);
 
@@ -223,6 +225,8 @@ export class QueryCreate implements OnInit {
         // Restore filters from domain (inverse of buildDomain)
         this.filters.set(this.parseDomain(q.domain ?? []));
         this.loadingFields.set(false);
+        // Start directly on the fields step in edit mode; model is immutable.
+        this.activeStep.set(1);
       },
       error: () => {
         this.fieldsError.set('No se pudieron cargar los campos.');
