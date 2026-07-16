@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 from datetime import datetime
 
-import db
+from config_store import get_store
 from routers.runner import _fetch_registered, fetch_query_rows
 from routers.bigquery import upload_to_bigquery, BigQueryUploadPayload
 
@@ -75,40 +75,14 @@ class ScheduleRunResponse(BaseModel):
     rows_loaded: int | None
 
 
-def _row_to_schedule(row: dict) -> dict:
-    return {
-        "id": row["id"],
-        "name": row["name"],
-        "query_name": row["query_name"],
-        "dataset_id": row["dataset_id"],
-        "table_id": row["table_id"],
-        "frequency": row["frequency"],
-        "hour": row["hour"],
-        "minute": row["minute"],
-        "day_of_week": row["day_of_week"],
-        "day_of_month": row["day_of_month"],
-        "interval_hours": row["interval_hours"],
-        "active": row["active"],
-        "last_run_at": row["last_run_at"],
-        "last_run_status": row["last_run_status"],
-        "last_run_message": row["last_run_message"],
-        "created_at": row["created_at"],
-    }
-
-
 @router.get("", response_model=list[ScheduleResponse])
 def list_schedules():
-    rows = db.query("SELECT * FROM query_schedules ORDER BY created_at DESC")
-    return [_row_to_schedule(r) for r in rows]
+    return get_store().list_schedules()
 
 
 @router.get("/{schedule_id}/runs", response_model=list[ScheduleRunResponse])
 def list_runs(schedule_id: int):
-    rows = db.query(
-        "SELECT * FROM query_schedule_runs WHERE schedule_id = %s ORDER BY started_at DESC LIMIT 50",
-        (schedule_id,),
-    )
-    return [dict(r) for r in rows]
+    return get_store().list_runs(schedule_id)
 
 
 @router.post("", response_model=ScheduleResponse)
@@ -117,39 +91,17 @@ def create_schedule(payload: ScheduleCreate):
     _ensure_query_exists(payload.query_name)
     payload_dict = payload.model_dump()
 
-    row = db.query(
-        """
-        INSERT INTO query_schedules
-        (name, query_name, dataset_id, table_id, frequency, hour, minute, day_of_week, day_of_month, interval_hours, active)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        RETURNING *
-        """,
-        (
-            payload_dict["name"],
-            payload_dict["query_name"],
-            payload_dict["dataset_id"],
-            payload_dict["table_id"],
-            payload_dict["frequency"],
-            payload_dict["hour"],
-            payload_dict["minute"],
-            payload_dict["day_of_week"],
-            payload_dict["day_of_month"],
-            payload_dict["interval_hours"],
-            payload_dict["active"],
-        ),
-    )[0]
-    schedule = _row_to_schedule(row)
+    schedule = get_store().create_schedule(payload_dict)
     _register_job(schedule)
     return schedule
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleResponse)
 def update_schedule(schedule_id: int, payload: ScheduleUpdate):
-    existing = db.query("SELECT * FROM query_schedules WHERE id = %s", (schedule_id,))
-    if not existing:
+    current = get_store().get_schedule(schedule_id)
+    if current is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
 
-    current = existing[0]
     merged = {
         "name": payload.name if payload.name is not None else current["name"],
         "query_name": payload.query_name if payload.query_name is not None else current["query_name"],
@@ -167,51 +119,26 @@ def update_schedule(schedule_id: int, payload: ScheduleUpdate):
     _validate_schedule_fields(merged["frequency"], merged)
     _ensure_query_exists(merged["query_name"])
 
-    row = db.query(
-        """
-        UPDATE query_schedules
-        SET name = %s, query_name = %s, dataset_id = %s, table_id = %s,
-            frequency = %s, hour = %s, minute = %s, day_of_week = %s,
-            day_of_month = %s, interval_hours = %s, active = %s
-        WHERE id = %s
-        RETURNING *
-        """,
-        (
-            merged["name"],
-            merged["query_name"],
-            merged["dataset_id"],
-            merged["table_id"],
-            merged["frequency"],
-            merged["hour"],
-            merged["minute"],
-            merged["day_of_week"],
-            merged["day_of_month"],
-            merged["interval_hours"],
-            merged["active"],
-            schedule_id,
-        ),
-    )[0]
-    schedule = _row_to_schedule(row)
+    schedule = get_store().update_schedule(schedule_id, merged)
     _register_job(schedule)
     return schedule
 
 
 @router.delete("/{schedule_id}")
 def delete_schedule(schedule_id: int):
-    existing = db.query("SELECT * FROM query_schedules WHERE id = %s", (schedule_id,))
-    if not existing:
+    if get_store().get_schedule(schedule_id) is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
     _unregister_job(schedule_id)
-    db.execute("DELETE FROM query_schedules WHERE id = %s", (schedule_id,))
+    get_store().delete_schedule(schedule_id)
     return {"deleted": schedule_id}
 
 
 @router.post("/{schedule_id}/run")
 def run_schedule_now(schedule_id: int):
-    existing = db.query("SELECT * FROM query_schedules WHERE id = %s", (schedule_id,))
-    if not existing:
+    existing = get_store().get_schedule(schedule_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
-    return _execute_schedule(existing[0])
+    return _execute_schedule(existing)
 
 
 def _validate_schedule_fields(frequency: str, fields):
@@ -258,9 +185,9 @@ def start_scheduler():
     scheduler = get_scheduler()
     if scheduler.running:
         return
-    schedules = db.query("SELECT * FROM query_schedules WHERE active = TRUE")
+    schedules = [s for s in get_store().list_schedules() if s.get("active", True)]
     for s in schedules:
-        _register_job(_row_to_schedule(s))
+        _register_job(s)
     scheduler.start()
 
 
@@ -305,18 +232,19 @@ def _build_trigger(schedule: dict):
 
 
 def _execute_schedule_job(schedule_id: int):
-    rows = db.query("SELECT * FROM query_schedules WHERE id = %s", (schedule_id,))
-    if not rows:
+    schedule = get_store().get_schedule(schedule_id)
+    if schedule is None:
         return
-    _execute_schedule(rows[0])
+    _execute_schedule(schedule)
 
 
 def _execute_schedule(schedule: dict):
-
-    run_id = db.query(
-        "INSERT INTO query_schedule_runs (schedule_id, status) VALUES (%s, %s) RETURNING id",
-        (schedule["id"], "running"),
-    )[0]["id"]
+    store = get_store()
+    run = store.insert_run({
+        "schedule_id": schedule["id"],
+        "status": "running",
+    })
+    run_id = run["id"]
 
     try:
         registered = _fetch_registered(schedule["query_name"])
@@ -341,36 +269,18 @@ def _execute_schedule(schedule: dict):
             origin="schedule",
         )
 
-        db.execute(
-            """
-            UPDATE query_schedule_runs
-            SET finished_at = NOW(), status = %s, message = %s, rows_loaded = %s
-            WHERE id = %s
-            """,
-            (
-                "success",
-                f"Loaded {result.rows_loaded} rows into {schedule['dataset_id']}.{schedule['table_id']}",
-                result.rows_loaded,
-                run_id,
-            ),
-        )
-        db.execute(
-            """
-            UPDATE query_schedules
-            SET last_run_at = NOW(), last_run_status = %s, last_run_message = %s
-            WHERE id = %s
-            """,
-            ("success", f"Loaded {result.rows_loaded} rows", schedule["id"]),
-        )
+        store.finish_run(run_id, {
+            "status": "success",
+            "message": f"Loaded {result.rows_loaded} rows into {schedule['dataset_id']}.{schedule['table_id']}",
+            "rows_loaded": result.rows_loaded,
+        })
         return {"status": "success", "rows_loaded": result.rows_loaded}
 
     except Exception as e:
-        db.execute(
-            "UPDATE query_schedule_runs SET finished_at = NOW(), status = %s, message = %s WHERE id = %s",
-            ("error", str(e), run_id),
-        )
-        db.execute(
-            "UPDATE query_schedules SET last_run_at = NOW(), last_run_status = %s, last_run_message = %s WHERE id = %s",
-            ("error", str(e), schedule["id"]),
-        )
+        store.finish_run(run_id, {
+            "status": "error",
+            "message": str(e),
+        })
         return {"status": "error", "message": str(e)}
+
+

@@ -1,16 +1,15 @@
 from fastapi import APIRouter, HTTPException
-from db import query as pg_query
+from config_store import get_store
 from odoo_client import execute as odoo_execute
 
 router = APIRouter(prefix="/run", tags=["runner"])
 
 
 def _fetch_registered(name: str) -> dict | None:
-    rows = pg_query(
-        "SELECT * FROM odoo_queries WHERE name = %s AND active = TRUE",
-        (name,),
-    )
-    return rows[0] if rows else None
+    row = get_store().get_query(name)
+    if row is None or not row.get("active", True):
+        return None
+    return row
 
 
 def fetch_query_rows(query: dict) -> list[dict]:
@@ -45,3 +44,4 @@ def run_query(name: str):
 
     result = fetch_query_rows(registered)
     return {"query": name, "total": len(result), "data": result}
+
