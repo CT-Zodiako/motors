@@ -43,7 +43,6 @@
               [severity]="s.active ? 'secondary' : 'success'"
               [text]="true"
               (onClick)="toggleActive(s)"
-
             />
             <p-button icon="pi pi-history" severity="info" [text]="true" (onClick)="openRuns(s)" />
             <p-button icon="pi pi-play-circle" severity="success" [text]="true" (onClick)="runNow(s)" />
@@ -65,122 +64,168 @@
     [modal]="true"
     [closable]="!saving()"
     [dismissableMask]="!saving()"
-    [style]="{ width: '640px', maxWidth: '90vw' }"
+    [style]="{ width: '680px', maxWidth: '92vw' }"
     styleClass="schedule-dialog"
   >
     <div class="schedule-form">
-      <div class="schedule-field">
-        <label for="scheduleName">Nombre</label>
-        <input
-          id="scheduleName"
-          pInputText
-          type="text"
-          [(ngModel)]="name"
-          placeholder="Exportación diaria de ventas"
-          class="schedule-input"
-        />
-      </div>
+      <!-- Identificación -->
+      <div class="schedule-section">
+        <h3 class="schedule-section-title">
+          <i class="pi pi-tag"></i>
+          Identificación
+        </h3>
 
-      <div class="schedule-field">
-        <label>Query</label>
-        <p-select
-          [options]="queries()"
-          [(ngModel)]="queryName"
-          (onChange)="onQueryChange()"
-          optionLabel="name"
-          optionValue="name"
-          placeholder="Seleccioná un query..."
-          appendTo="body"
-          class="schedule-select"
-        />
-      </div>
-
-      <div class="schedule-row">
         <div class="schedule-field">
-          <label>Dataset</label>
+          <label for="scheduleName">Nombre de la programación</label>
+          <input
+            id="scheduleName"
+            pInputText
+            type="text"
+            [(ngModel)]="name"
+            placeholder="Ej: Exportación diaria de ventas"
+            class="schedule-input"
+          />
+          <p class="field-hint">Nombre interno para identificar esta programación.</p>
+        </div>
+
+        <div class="schedule-field">
+          <label>Query de origen</label>
           <p-select
-            [options]="datasets()"
-            [(ngModel)]="datasetId"
-            (onChange)="onDatasetChange()"
-            optionLabel="id"
-            optionValue="id"
-            placeholder="Seleccioná un dataset..."
+            [options]="queries()"
+            [(ngModel)]="queryName"
+            (onChange)="onQueryChange()"
+            optionLabel="name"
+            optionValue="name"
+            placeholder="Seleccioná un query..."
             appendTo="body"
             class="schedule-select"
           />
-        </div>
-
-        <div class="schedule-field">
-          <label>Tabla</label>
-          <p-autocomplete
-            [(ngModel)]="tableId"
-            [suggestions]="tableSuggestions()"
-            (completeMethod)="searchTable($event)"
-            [forceSelection]="false"
-            [dropdown]="true"
-            [disabled]="!datasetId"
-            placeholder="Seleccioná o escribí una tabla..."
-            class="schedule-autocomplete"
-          />
-          <p class="muted">Si la tabla no existe, se creará en la primera ejecución.</p>
+          <p class="field-hint info">
+            <i class="pi pi-info-circle"></i>
+            Si el query ya tiene un destino en BigQuery, el dataset y la tabla se completarán automáticamente.
+          </p>
         </div>
       </div>
 
-      <div class="schedule-field">
-        <label>Frecuencia</label>
-        <p-select
-          [options]="frequencyOptions"
-          [(ngModel)]="frequency"
-          optionLabel="label"
-          optionValue="value"
-          appendTo="body"
-          class="schedule-select"
-        />
-      </div>
+      <!-- Destino BigQuery -->
+      <div class="schedule-section">
+        <h3 class="schedule-section-title">
+          <i class="pi pi-cloud-upload"></i>
+          Destino en BigQuery
+        </h3>
 
-      @if (showHourMinute()) {
         <div class="schedule-row">
           <div class="schedule-field">
-            <label>Hora</label>
-            <p-inputnumber [(ngModel)]="hour" [min]="0" [max]="23" styleClass="schedule-input" />
+            <label>Dataset</label>
+            <p-select
+              [options]="datasets()"
+              [(ngModel)]="datasetId"
+              (onChange)="onDatasetChange()"
+              optionLabel="id"
+              optionValue="id"
+              placeholder="Seleccioná un dataset..."
+              appendTo="body"
+              class="schedule-select"
+            />
           </div>
+
           <div class="schedule-field">
-            <label>Minuto</label>
-            <p-inputnumber [(ngModel)]="minute" [min]="0" [max]="59" styleClass="schedule-input" />
+            <label>Tabla destino</label>
+            <p-autocomplete
+              [(ngModel)]="tableId"
+              [suggestions]="tableSuggestions()"
+              (completeMethod)="searchTable($event)"
+              [forceSelection]="false"
+              [dropdown]="true"
+              [disabled]="!datasetId"
+              placeholder="Seleccioná o escribí una tabla..."
+              class="schedule-autocomplete"
+            />
+            <p class="field-hint warning">
+              <i class="pi pi-exclamation-triangle"></i>
+              Si la tabla no existe, se creará automáticamente en la primera ejecución.
+            </p>
           </div>
         </div>
-      }
+      </div>
 
-      @if (showDayOfWeek()) {
+      <!-- Frecuencia -->
+      <div class="schedule-section">
+        <h3 class="schedule-section-title">
+          <i class="pi pi-clock"></i>
+          Frecuencia de ejecución
+        </h3>
+
         <div class="schedule-field">
-          <label>Día de la semana</label>
+          <label>Frecuencia</label>
           <p-select
-            [options]="dayOfWeekOptions"
-            [(ngModel)]="dayOfWeek"
+            [options]="frequencyOptions"
+            [(ngModel)]="frequency"
             optionLabel="label"
             optionValue="value"
             appendTo="body"
             class="schedule-select"
           />
         </div>
-      }
 
-      @if (showDayOfMonth()) {
-        <div class="schedule-field">
-          <label>Día del mes</label>
-          <p-inputnumber [(ngModel)]="dayOfMonth" [min]="1" [max]="31" styleClass="schedule-input" />
+        @if (showHourMinute()) {
+          <div class="schedule-row">
+            <div class="schedule-field">
+              <label>Hora (24 hs)</label>
+              <p-inputnumber [(ngModel)]="hour" [min]="0" [max]="23" styleClass="schedule-input" />
+            </div>
+            <div class="schedule-field">
+              <label>Minuto</label>
+              <p-inputnumber [(ngModel)]="minute" [min]="0" [max]="59" styleClass="schedule-input" />
+            </div>
+          </div>
+        }
+
+        @if (showDayOfWeek()) {
+          <div class="schedule-field">
+            <label>Día de la semana</label>
+            <p-select
+              [options]="dayOfWeekOptions"
+              [(ngModel)]="dayOfWeek"
+              optionLabel="label"
+              optionValue="value"
+              appendTo="body"
+              class="schedule-select"
+            />
+          </div>
+        }
+
+        @if (showDayOfMonth()) {
+          <div class="schedule-field">
+            <label>Día del mes</label>
+            <p-inputnumber [(ngModel)]="dayOfMonth" [min]="1" [max]="31" styleClass="schedule-input" />
+          </div>
+        }
+
+        @if (showIntervalHours()) {
+          <div class="schedule-field">
+            <label>Intervalo en horas</label>
+            <p-inputnumber [(ngModel)]="intervalHours" [min]="1" [max]="24" styleClass="schedule-input" />
+          </div>
+        }
+      </div>
+
+      <!-- Activación -->
+      <div class="schedule-section">
+        <h3 class="schedule-section-title">
+          <i class="pi pi-power-off"></i>
+          Activación
+        </h3>
+
+        <div class="schedule-active-box">
+          <p-checkbox [(ngModel)]="active" [binary]="true" />
+          <div class="active-info">
+            <span class="active-title">Programación activa</span>
+            <p class="active-desc">
+              Cuando está activa, el sistema ejecuta automáticamente el envío a BigQuery según la frecuencia configurada. Si la desactivás, la programación se guarda pero no se ejecuta.
+            </p>
+          </div>
         </div>
-      }
-
-      @if (showIntervalHours()) {
-        <div class="schedule-field">
-          <label>Cada X horas</label>
-          <p-inputnumber [(ngModel)]="intervalHours" [min]="1" [max]="24" styleClass="schedule-input" />
-        </div>
-      }
-
-      <div class="schedule-field inline">
-        <p-checkbox [(ngModel)]="active" [binary]="true" label="Activa" />
       </div>
     </div>
 
@@ -192,7 +237,7 @@
         (onClick)="closeDialog()"
       />
       <p-button
-        label="Guardar"
+        [label]="editing ? 'Guardar cambios' : 'Crear programación'"
         icon="pi pi-check"
         [loading]="saving()"
         (onClick)="save()"
