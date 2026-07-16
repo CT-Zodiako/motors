@@ -294,8 +294,8 @@
             </div>
             <div class="field-group">
               <label>Límite de registros</label>
-              <p-inputnumber [ngModel]="limitVal()" (ngModelChange)="limitVal.set($event)" [min]="1" [max]="100000" />
-              <small>Cuántos registros devuelve la consulta (por defecto 100).</small>
+              <p-inputnumber [ngModel]="limitVal()" (ngModelChange)="limitVal.set($event)" [min]="1" [max]="100000" placeholder="Vacío = todos los registros" />
+              <small>Dejá el campo vacío para traer todos los registros, o ingresá un límite específico.</small>
             </div>
             <p-button
               label="Crear consulta"

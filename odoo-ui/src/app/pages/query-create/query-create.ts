@@ -114,7 +114,7 @@ export class QueryCreate implements OnInit {
   showNewCategory = signal(false);
   newCategoryName = signal('');
   creatingCategory = signal(false);
-  limitVal = signal(100);
+  limitVal = signal<number | null>(null);
 
   fieldMap = computed(() => {
     const map = new Map<string, FieldMeta>();
@@ -199,7 +199,7 @@ export class QueryCreate implements OnInit {
   private loadQueryForEdit(q: OdooQuery) {
     // Pre-fill the wizard with existing query data
     this.queryName.set(q.name);
-    this.limitVal.set(q.limit_val ?? 100);
+    this.limitVal.set(q.limit_val > 0 ? q.limit_val : null);
     this.selectedCategoryId.set(q.category?.id ?? null);
 
     // Snapshot original fields for destructive confirmation
@@ -360,7 +360,7 @@ export class QueryCreate implements OnInit {
       method: 'search_read',
       domain: this.buildDomain(),
       fields: this.checkedFieldsList().map(f => f.key),
-      limit_val: this.limitVal(),
+      limit_val: this.limitVal() ?? 0,
       category_id: this.selectedCategoryId() ?? undefined,
     }).subscribe({
       next: (res) => {
@@ -399,7 +399,7 @@ export class QueryCreate implements OnInit {
       description: q.description, // preserve original description (wizard has no description editor)
       domain: this.buildDomain(),
       fields: this.checkedFieldsList().map(f => f.key),
-      limit_val: this.limitVal(),
+      limit_val: this.limitVal() ?? 0,
       category_id: this.selectedCategoryId() ?? undefined,
     };
 
@@ -435,5 +435,6 @@ export class QueryCreate implements OnInit {
     this.queryName.set('');
     this.modelSearch.set('');
     this.fieldSearch.set('');
+    this.limitVal.set(null);
   }
 }
