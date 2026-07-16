@@ -1,76 +1,81 @@
 <div class="page">
   <div class="page-header">
-    <h1>{{ isEditMode() ? 'Editar Query' : 'Nuevo Query' }}</h1>
+    <div>
+      <h1>{{ isEditMode() ? 'Editar Query' : 'Nuevo Query' }}</h1>
+      <p class="subtitle">
+        {{ isEditMode() ? 'Revisá y ajustá los campos de la consulta guardada.' : 'Seleccioná un modelo, campos y filtros para crear una consulta de Odoo.' }}
+      </p>
+    </div>
   </div>
 
   @if (isEditMode()) {
-    <div class="edit-summary">
+    <div class="page-card edit-summary">
       <input pInputText class="input-name" [ngModel]="queryName()" readonly />
       <span class="method-readonly">{{ editingQuery()?.method }}</span>
     </div>
   }
 
-  @if (selectedModel(); as m) {
-    <div class="model-context-banner">
-      <span class="model-context-icon">🗂️</span>
-      <span class="model-context-label">{{ m.label }}</span>
-      <code class="model-context-code">{{ m.model }}</code>
-    </div>
-  }
+  <div class="page-card">
+    @if (selectedModel(); as m) {
+      <div class="model-context-banner">
+        <span class="model-context-icon">🗂️</span>
+        <span class="model-context-label">{{ m.label }}</span>
+        <code class="model-context-code">{{ m.model }}</code>
+      </div>
+    }
 
-  <p-stepper [value]="activeStep()" styleClass="custom-stepper">
+    <p-stepper [value]="activeStep()" styleClass="custom-stepper">
+      <!-- PASO 1: MODELO -->
+      <p-step-panel [value]="0" header="Modelo">
+        <ng-template #content>
+          <div class="step-content">
+            <p class="hint">Elegí una de las áreas comunes o buscá cualquier módulo de tu Odoo.</p>
 
-    <!-- PASO 1: MODELO -->
-    <p-step-panel [value]="0" header="Modelo">
-      <ng-template #content>
-        <div class="step-content">
-          <p class="hint">Elegí una de las áreas comunes o buscá cualquier módulo de tu Odoo.</p>
-
-          <p class="section-label">Más usados</p>
-          <div class="model-grid">
-            @for (m of pinnedModels; track m.model) {
-              <button class="model-card" [class.selected]="selectedModel()?.model === m.model" [disabled]="isEditMode()" (click)="selectModel(m)">
-                <span class="model-icon">{{ m.icon }}</span>
-                <span class="model-label">{{ m.label }}</span>
-                <span class="model-desc">{{ m.description }}</span>
-              </button>
-            }
-
-          </div>
-
-          <p class="section-label">
-            Todos los modelos
-            @if (loadingModels()) { <span class="muted-inline">— cargando...</span> }
-            @else { <span class="muted-inline">— {{ allModels().length }} disponibles</span> }
-          </p>
-
-          <input
-            pInputText
-            class="w-full"
-            placeholder="Buscar por nombre o código técnico..."
-            [ngModel]="modelSearch()"
-            (ngModelChange)="modelSearch.set($event)"
-            name="modelSearch"
-          />
-
-          @if (modelSearch().length > 0 && !loadingModels()) {
-            <div class="model-results">
-              @if (filteredModels().length === 0) {
-                <p class="muted">Sin resultados para "{{ modelSearch() }}".</p>
-              } @else {
-                @for (m of filteredModels(); track m.model) {
-                  <button class="model-row" (click)="selectModel(m)">
-                    <span>🗂️</span>
-                    <span class="model-row-name">{{ m.name }}</span>
-                    <code class="model-row-code">{{ m.model }}</code>
-                  </button>
-                }
+            <p class="section-label">Más usados</p>
+            <div class="model-grid">
+              @for (m of pinnedModels; track m.model) {
+                <button class="model-card" [class.selected]="selectedModel()?.model === m.model" [disabled]="isEditMode()" (click)="selectModel(m)">
+                  <span class="model-icon">{{ m.icon }}</span>
+                  <span class="model-label">{{ m.label }}</span>
+                  <span class="model-desc">{{ m.description }}</span>
+                </button>
               }
+
             </div>
-          }
-        </div>
-      </ng-template>
-    </p-step-panel>
+
+            <p class="section-label">
+              Todos los modelos
+              @if (loadingModels()) { <span class="muted-inline">— cargando...</span> }
+              @else { <span class="muted-inline">— {{ allModels().length }} disponibles</span> }
+            </p>
+
+            <input
+              pInputText
+              class="w-full"
+              placeholder="Buscar por nombre o código técnico..."
+              [ngModel]="modelSearch()"
+              (ngModelChange)="modelSearch.set($event)"
+              name="modelSearch"
+            />
+
+            @if (modelSearch().length > 0 && !loadingModels()) {
+              <div class="model-results">
+                @if (filteredModels().length === 0) {
+                  <p class="muted">Sin resultados para "{{ modelSearch() }}".</p>
+                } @else {
+                  @for (m of filteredModels(); track m.model) {
+                    <button class="model-row" (click)="selectModel(m)">
+                      <span>🗂️</span>
+                      <span class="model-row-name">{{ m.name }}</span>
+                      <code class="model-row-code">{{ m.model }}</code>
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
+        </ng-template>
+      </p-step-panel>
 
     <!-- PASO 2: CAMPOS -->
     <p-step-panel [value]="1" header="Campos">

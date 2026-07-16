@@ -9,6 +9,7 @@ import { ToastModule } from 'primeng/toast';
 type Tab = 'list' | 'create' | 'runner' | 'schedules' | 'upload';
 
 interface NavItem { id: Tab; label: string; icon: string; }
+interface NavGroup { label: string; items: NavItem[]; }
 
 @Component({
   selector: 'app-root',
@@ -19,12 +20,22 @@ interface NavItem { id: Tab; label: string; icon: string; }
 export class App {
   activeTab = signal<Tab>('list');
 
-  nav: NavItem[] = [
-    { id: 'list',       label: 'Queries',       icon: 'pi-database' },
-    { id: 'create',     label: 'Nuevo Query',   icon: 'pi-plus-circle' },
-    { id: 'runner',     label: 'Ejecutar',      icon: 'pi-play-circle' },
-    { id: 'upload',     label: 'Cargar archivo', icon: 'pi-upload' },
-    { id: 'schedules',  label: 'Programar',     icon: 'pi-calendar-clock' },
+  navGroups: NavGroup[] = [
+    {
+      label: 'Consultar',
+      items: [
+        { id: 'list', label: 'Queries', icon: 'pi-database' },
+        { id: 'runner', label: 'Ejecutar', icon: 'pi-play-circle' },
+        { id: 'schedules', label: 'Programar', icon: 'pi-calendar-clock' },
+      ]
+    },
+    {
+      label: 'Cargar datos',
+      items: [
+        { id: 'create', label: 'Nuevo Query', icon: 'pi-plus-circle' },
+        { id: 'upload', label: 'Cargar archivo', icon: 'pi-upload' },
+      ]
+    }
   ];
 
   setTab(tab: Tab) { this.activeTab.set(tab); }

@@ -46,6 +46,26 @@ export class QueryRunner implements OnInit {
   result = signal<QueryResult | null>(null);
   checkedColumns = signal<Set<string>>(new Set());
 
+  querySelectDialogVisible = signal(false);
+  querySearch = signal('');
+  filteredQueriesForDialog = computed(() => {
+    const term = this.querySearch().trim().toLowerCase();
+    const rows = this.queries();
+    if (!term) return rows;
+    return rows.filter((q) => {
+      const haystack = [
+        q.name,
+        q.description,
+        q.model,
+        q.category?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  });
+
   // Visual-only per-column filters for the results table. Never touches
   // result().data, so BigQuery export always sends the full result set.
   columnFilters = signal<Record<string, string | undefined>>({});
@@ -132,6 +152,17 @@ export class QueryRunner implements OnInit {
     { label: 'SQL Postgres', icon: 'pi pi-server',     command: () => this.download('sql', 'postgres') },
     { label: 'SQL Oracle',   icon: 'pi pi-server',     command: () => this.download('sql', 'oracle') },
   ]);
+
+  openQuerySelector() {
+    this.querySearch.set('');
+    this.querySelectDialogVisible.set(true);
+  }
+
+  selectQuery(q: OdooQuery) {
+    this.selected.set(q);
+    this.result.set(null);
+    this.querySelectDialogVisible.set(false);
+  }
 
   ngOnInit() {
     this.svc.list().subscribe({ next: (q) => this.queries.set(q.filter(x => x.active)) });

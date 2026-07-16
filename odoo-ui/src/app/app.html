@@ -2,23 +2,39 @@
 
 <div class="layout">
   <aside class="sidebar">
-    <div class="sidebar-logo">
-      <i class="pi pi-link"></i>
-      Odoo Bridge
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">
+        <i class="pi pi-link"></i>
+        Odoo Bridge
+      </div>
+      <p class="sidebar-tagline">Conectá Odoo con BigQuery de forma segura</p>
     </div>
-    @for (item of nav; track item.id) {
-      <button class="nav-item" [class.active]="activeTab() === item.id" (click)="setTab(item.id)">
-        <i class="pi {{ item.icon }}"></i>
-        {{ item.label }}
-      </button>
-    }
+
+    <nav class="sidebar-nav">
+      @for (group of navGroups; track group.label) {
+        <div class="nav-group">
+          <span class="nav-group-label">{{ group.label }}</span>
+          @for (item of group.items; track item.id) {
+            <button
+              class="nav-item"
+              [class.active]="activeTab() === item.id"
+              (click)="setTab(item.id)"
+            >
+              <i class="pi {{ item.icon }}"></i>
+              {{ item.label }}
+            </button>
+          }
+        </div>
+      }
+    </nav>
+
   </aside>
 
   <main class="content">
     @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
     @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
     @if (activeTab() === 'runner')   { <app-query-runner /> }
-    
+
     @if (activeTab() === 'upload') { <app-file-upload /> }
     @if (activeTab() === 'schedules') { <app-schedule-manager /> }
   </main>

@@ -73,6 +73,7 @@ class QueryPatchIn(BaseModel):
     fields: list | None = None
     limit_val: int | None = None
     category_id: int | None = None
+    active: bool | None = None
     name: str | None = None
     model: str | None = None
     method: str | None = None
@@ -142,6 +143,8 @@ def update_query(name: str, body: QueryPatchIn):
         patch["limit_val"] = body.limit_val
     if body.category_id is not None:
         patch["category_id"] = body.category_id
+    if body.active is not None:
+        patch["active"] = body.active
 
     if patch:
         get_store().patch_query(name, patch)
@@ -154,11 +157,9 @@ def update_query(name: str, body: QueryPatchIn):
 
 
 @router.delete("/{name}")
-def deactivate_query(name: str):
+def delete_query(name: str):
     try:
-        get_store().deactivate_query(name)
+        get_store().delete_query(name)
     except NotFoundError:
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found")
-    return {"deactivated": name}
-
-
+    return {"deleted": name}

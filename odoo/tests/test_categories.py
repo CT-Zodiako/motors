@@ -62,7 +62,7 @@ def test_delete_general_409(client):
     assert any(c["name"] == "General" for c in items)
 
 
-def test_delete_referenced_category_409_including_inactive_queries(client):
+def test_delete_referenced_category_after_query_deleted(client):
     cat = client.post("/categories/", json={"name": f"t_ref_{_uid()}"}).json()
     cat_id = cat["id"] if "id" in cat else cat["category"]["id"]
     qname = f"t_qref_{_uid()}"
@@ -73,11 +73,11 @@ def test_delete_referenced_category_409_including_inactive_queries(client):
         ).status_code
         == 201
     )
-    # referenced by an ACTIVE query
+    # referenced by a query
     assert client.delete(f"/categories/{cat_id}").status_code == 409
-    # soft-delete the query — category MUST STILL be blocked (inactive rows count)
+    # physically delete the query — category can now be deleted
     assert client.delete(f"/queries/{qname}").status_code == 200
-    assert client.delete(f"/categories/{cat_id}").status_code == 409
+    assert client.delete(f"/categories/{cat_id}").status_code == 204
 
 
 def test_delete_unreferenced_category_204(client):

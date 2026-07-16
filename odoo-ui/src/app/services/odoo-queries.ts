@@ -76,7 +76,11 @@ export class OdooQueriesService {
     return this.http.post<{ registered: string }>(`${this.base}/queries/`, payload);
   }
 
-  deactivate(name: string): Observable<unknown> {
+  setActive(name: string, active: boolean): Observable<unknown> {
+    return this.http.patch(`${this.base}/queries/${encodeURIComponent(name)}`, { active });
+  }
+
+  delete(name: string): Observable<unknown> {
     return this.http.delete(`${this.base}/queries/${name}`);
   }
 

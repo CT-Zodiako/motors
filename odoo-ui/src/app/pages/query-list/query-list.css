@@ -1,4 +1,133 @@
-.table-caption { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.desc { color: #6e6e73; max-width: 220px; }
-code { background: #f2f2f7; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
-.empty-msg { text-align: center; color: #6e6e73; padding: 32px !important; }
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.search-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.search-field .p-input-icon-left {
+  display: inline-flex;
+  position: relative;
+}
+
+.search-field .p-input-icon-left > i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--app-muted);
+  font-size: 14px;
+  z-index: 1;
+}
+
+.search-field .search-input {
+  width: 280px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  padding: 0 14px 0 38px;
+  font-size: 14px;
+  color: var(--app-text);
+  background: var(--app-surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.search-field .search-input::placeholder {
+  color: #9ca3af;
+}
+
+.search-field .search-input:focus {
+  outline: none;
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.10);
+}
+
+.category-filter {
+  min-width: 200px;
+}
+
+.desc {
+  color: var(--app-muted, #6b7280);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+code {
+  background: #f2f2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.empty-msg {
+  text-align: center;
+  color: var(--app-muted, #6b7280);
+  padding: 32px !important;
+}
+
+.col-options {
+  width: 100px;
+  text-align: center;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.category-group-row {
+  background: #f9fafb;
+}
+
+.category-group-label {
+  font-weight: 600;
+  color: var(--app-text, #1f2937);
+  margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .table-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toolbar-filters {
+    width: 100%;
+  }
+
+  .search-field,
+  .category-filter {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .search-field .search-input {
+    width: 100%;
+  }
+}
