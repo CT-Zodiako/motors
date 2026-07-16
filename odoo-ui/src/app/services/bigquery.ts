@@ -27,12 +27,6 @@ export interface BigQueryTablesResponse {
   tables: BigQueryTable[];
 }
 
-export interface BigQuerySyncResponse {
-  synced: string;
-  rows: number;
-  message: string;
-}
-
 export interface BigQueryUploadResponse {
   dataset_id: string;
   table_id: string;
@@ -51,13 +45,6 @@ export class BigQueryService {
 
   listTables(datasetId: string): Observable<BigQueryTablesResponse> {
     return this.http.get<BigQueryTablesResponse>(`${this.base}/bigquery/tables/${datasetId}`);
-  }
-
-  syncTable(datasetId: string, tableId: string): Observable<BigQuerySyncResponse> {
-    return this.http.post<BigQuerySyncResponse>(
-      `${this.base}/bigquery/sync/${datasetId}/${tableId}`,
-      {}
-    );
   }
 
   uploadToBigQuery(
