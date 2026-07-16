@@ -86,6 +86,7 @@
         <p-select
           [options]="queries()"
           [(ngModel)]="queryName"
+          (onChange)="onQueryChange()"
           optionLabel="name"
           optionValue="name"
           placeholder="Seleccioná un query..."
@@ -111,16 +112,17 @@
 
         <div class="schedule-field">
           <label>Tabla</label>
-          <p-select
-            [options]="tables()"
+          <p-autocomplete
             [(ngModel)]="tableId"
-            optionLabel="id"
-            optionValue="id"
+            [suggestions]="tableSuggestions()"
+            (completeMethod)="searchTable($event)"
+            [forceSelection]="false"
+            [dropdown]="true"
             [disabled]="!datasetId"
-            placeholder="Seleccioná una tabla..."
-            appendTo="body"
-            class="schedule-select"
+            placeholder="Seleccioná o escribí una tabla..."
+            class="schedule-autocomplete"
           />
+          <p class="muted">Si la tabla no existe, se creará en la primera ejecución.</p>
         </div>
       </div>
 
@@ -236,3 +238,5 @@
     </ng-template>
   </p-dialog>
 </div>
+
+
