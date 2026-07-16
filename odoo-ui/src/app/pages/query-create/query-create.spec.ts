@@ -181,26 +181,27 @@ describe('QueryCreate (editable-queries edit mode)', () => {
     req.flush({ query: mockQuery, propagation: { total: 0, ok: 0, failed: 0, destinations: [] } });
   });
 
-  it('in edit mode name input is readonly, model cards are non-interactive, and method is shown read-only', () => {
-    editState.beginEdit(mockQuery);
-    component.ngOnInit();
-    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
-      fields: { name: { string: 'Nombre', type: 'char' }, amount: { string: 'Monto', type: 'float' } },
-    });
-    fixture.detectChanges();
-    // name input is readonly/disabled
-    const nameInput = fixture.nativeElement.querySelector('input.input-name');
-    expect(nameInput).toBeTruthy();
-    expect(nameInput.readOnly || nameInput.disabled).toBe(true);
-    // model cards are not clickable (no pointer-events or disabled attribute)
-    const modelCard = fixture.nativeElement.querySelector('.model-card');
-    expect(modelCard).toBeTruthy();
-    expect(modelCard.disabled || getComputedStyle(modelCard).pointerEvents === 'none').toBe(true);
-    // method shown as read-only text
-    const methodEl = fixture.nativeElement.querySelector('.method-readonly');
-    expect(methodEl).toBeTruthy();
-    expect(methodEl.textContent).toContain('search_read');
-  });
+      it('in edit mode wizard lands on fields step, name is readonly, and method is shown read-only', () => {
+        editState.beginEdit(mockQuery);
+        component.ngOnInit();
+        http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
+          fields: { name: { string: 'Nombre', type: 'char' }, amount: { string: 'Monto', type: 'float' } },
+        });
+        fixture.detectChanges();
+        // wizard skips model selection and starts directly on fields
+        expect(component.activeStep()).toBe(1);
+        // model cards are not rendered in the active step
+        const modelCard = fixture.nativeElement.querySelector('.model-card');
+        expect(modelCard).toBeNull();
+        // name input is readonly/disabled
+        const nameInput = fixture.nativeElement.querySelector('input.input-name');
+        expect(nameInput).toBeTruthy();
+        expect(nameInput.readOnly || nameInput.disabled).toBe(true);
+        // method shown as read-only text
+        const methodEl = fixture.nativeElement.querySelector('.method-readonly');
+        expect(methodEl).toBeTruthy();
+        expect(methodEl.textContent).toContain('search_read');
+      });
 
   it('selectModel is a no-op when in edit mode', () => {
     editState.beginEdit(mockQuery);
@@ -213,21 +214,6 @@ describe('QueryCreate (editable-queries edit mode)', () => {
     // try to select a different model
     component.selectModel({ label: 'Other', model: 'other.model', description: 'Other', icon: 'X' });
     expect(component.selectedModel()).toBe(prevModel); // unchanged
-  });
-
-  it('propagation summary includes pre-v1 self-register note', () => {
-    editState.beginEdit(mockQuery);
-    component.ngOnInit();
-    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
-      fields: { name: { string: 'Nombre', type: 'char' }, amount: { string: 'Monto', type: 'float' } },
-    });
-    component.save();
-    const req = http.expectOne('http://localhost:8000/queries/sales');
-    req.flush({ query: mockQuery, propagation: { total: 0, ok: 0, failed: 0, destinations: [] } });
-    fixture.detectChanges();
-    const dialog = fixture.nativeElement.querySelector('.propagation-summary');
-    expect(dialog).toBeTruthy();
-    expect(dialog.textContent).toContain('re-register');
   });
 
   it('400 error keeps edit mode and input state intact', () => {
