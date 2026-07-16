@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
 export interface QueryCategoryRef {
   id: number;
@@ -25,6 +26,19 @@ export interface QueryResult {
   query: string;
   total: number;
   data: Record<string, unknown>[];
+}
+
+export interface QueryDestination {
+  id: number;
+  query_name: string;
+  dataset_id: string;
+  table_id: string;
+  origin: string | null;
+  stale: boolean;
+  last_error: string | null;
+  last_sync_at: string | null;
+  last_schema: unknown[] | null;
+  created_at: string;
 }
 
 export interface CreateQueryPayload {
@@ -76,6 +90,11 @@ export class OdooQueriesService {
 
   run(name: string): Observable<QueryResult> {
     return this.http.get<QueryResult>(`${this.base}/run/${name}`);
+  }
+
+  getDestination(queryName: string): Observable<QueryDestination | null> {
+    return this.http.get<QueryDestination>(`${this.base}/queries/${encodeURIComponent(queryName)}/destination`)
+      .pipe(catchError(() => of(null)));
   }
 
   generateInsertPreview(

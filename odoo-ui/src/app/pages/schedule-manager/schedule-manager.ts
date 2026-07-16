@@ -4,6 +4,7 @@ import { SchedulesService, Schedule, ScheduleFrequency, ScheduleRun } from '../.
 import { OdooQueriesService, OdooQuery } from '../../services/odoo-queries';
 import { BigQueryService, BigQueryDataset, BigQueryTable } from '../../services/bigquery';
 import { Select } from 'primeng/select';
+import { AutoComplete } from 'primeng/autocomplete';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { InputNumber } from 'primeng/inputnumber';
@@ -31,11 +32,14 @@ const FREQUENCY_OPTIONS = [
   { label: 'Mensual', value: 'monthly' },
 ];
 
+const BQ_IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]{0,1023}$/;
+
 @Component({
   selector: 'app-schedule-manager',
   imports: [
     FormsModule,
     Select,
+    AutoComplete,
     Button,
     InputText,
     InputNumber,
@@ -84,6 +88,7 @@ export class ScheduleManager implements OnInit {
 
   dayOfWeekOptions = DAYS_OF_WEEK;
   frequencyOptions = FREQUENCY_OPTIONS;
+  tableSuggestions = signal<string[]>([]);
 
   showHourMinute = computed(() => this.frequency !== 'hourly');
   showDayOfWeek = computed(() => this.frequency === 'weekly');
@@ -116,14 +121,48 @@ export class ScheduleManager implements OnInit {
     });
   }
 
+  onQueryChange() {
+    this.datasetId = '';
+    this.tableId = '';
+    this.tables.set([]);
+    this.tableSuggestions.set([]);
+    if (!this.queryName) return;
+
+    this.queriesSvc.getDestination(this.queryName).subscribe({
+      next: (dest) => {
+        if (dest) {
+          this.datasetId = dest.dataset_id;
+          this.bq.listTables(this.datasetId).subscribe({
+            next: (res) => {
+              this.tables.set(res.tables);
+              this.tableId = dest.table_id;
+              this.tableSuggestions.set(res.tables.map(t => t.id));
+            },
+            error: () => this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas' }),
+          });
+        }
+      },
+      error: () => {},
+    });
+  }
+
   onDatasetChange() {
     this.tableId = '';
     this.tables.set([]);
+    this.tableSuggestions.set([]);
     if (!this.datasetId) return;
     this.bq.listTables(this.datasetId).subscribe({
-      next: (res) => this.tables.set(res.tables),
+      next: (res) => {
+        this.tables.set(res.tables);
+        this.tableSuggestions.set(res.tables.map(t => t.id));
+      },
       error: () => this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas' }),
     });
+  }
+
+  searchTable(event: { query: string }) {
+    const term = event.query.toLowerCase();
+    this.tableSuggestions.set(this.tables().map(t => t.id).filter(id => id.toLowerCase().includes(term)));
   }
 
   openCreate() {
@@ -148,6 +187,7 @@ export class ScheduleManager implements OnInit {
     this.bq.listTables(this.datasetId).subscribe({
       next: (res) => {
         this.tables.set(res.tables);
+        this.tableSuggestions.set(res.tables.map(t => t.id));
         this.tableId = schedule.table_id;
       },
       error: () => this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudieron cargar las tablas' }),
@@ -175,6 +215,7 @@ export class ScheduleManager implements OnInit {
     this.intervalHours = 1;
     this.active = true;
     this.tables.set([]);
+    this.tableSuggestions.set([]);
   }
 
   save() {
@@ -204,6 +245,10 @@ export class ScheduleManager implements OnInit {
   buildPayload() {
     if (!this.name.trim() || !this.queryName || !this.datasetId || !this.tableId) {
       this.msg.add({ severity: 'warn', summary: 'Faltan datos', detail: 'Completá todos los campos obligatorios' });
+      return null;
+    }
+    if (!BQ_IDENTIFIER_RE.test(this.tableId)) {
+      this.msg.add({ severity: 'warn', summary: 'Nombre inválido', detail: 'El nombre de tabla solo puede contener letras, números y guiones bajos, y no puede empezar con número' });
       return null;
     }
 
@@ -306,3 +351,5 @@ export class ScheduleManager implements OnInit {
     return schedule.frequency;
   }
 }
+
+
