@@ -139,3 +139,26 @@ small { font-size: 12px; color: #6e6e73; }
 }
 
 .field-relation { color: #0a84ff; }
+
+.model-context-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #f0f8ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.model-context-icon { font-size: 15px; }
+.model-context-label { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+
+.model-context-code {
+  font-size: 12px;
+  color: #0a84ff;
+  background: #fff;
+  border: 1px solid #d6e8ff;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
