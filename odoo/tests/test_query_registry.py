@@ -1,85 +1,78 @@
-"""Tests for query_registry module (editable-queries WU1).
+"""Tests for query_registry module (editable-queries WU1 / WU3 migration).
 
 Covers spec requirements: Query Destination Registry (R-CAT-4).
 """
 import pytest
 
-from db import execute as pg_execute, query as pg_query
+from config_store import get_store
 import init_db
 
 
-def _cols(table: str) -> set[str]:
-    rows = pg_query(
-        "SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table,)
-    )
-    return {r["column_name"] for r in rows}
+def _destinations_for(query_name: str) -> list[dict]:
+    return [d for d in get_store().list_destinations() if d["query_name"] == query_name]
 
 
-def _table_exists(table: str) -> bool:
-    rows = pg_query(
-        "SELECT 1 AS ok FROM information_schema.tables WHERE table_name = %s", (table,)
-    )
-    return bool(rows)
+@pytest.fixture(autouse=True)
+def _seed_query(store):
+    """Ensure a test query exists in the store before tests that need it."""
+    # The store fixture already creates General; tests create their own named queries.
+    yield
 
 
-def _count(table: str) -> int:
-    rows = pg_query(f"SELECT COUNT(*) AS n FROM {table}")
-    return rows[0]["n"]
+@pytest.fixture
+def sample_query(store):
+    """Create a query and return its name."""
+    store.upsert_query({
+        "name": "t_seed_query",
+        "description": "",
+        "model": "res.partner",
+        "method": "search_read",
+        "domain": [],
+        "fields": [],
+        "limit_val": 100,
+        "active": True,
+        "category_id": next(c["id"] for c in store.list_categories() if c["name"] == "General"),
+    })
+    return "t_seed_query"
 
 
-def test_init_creates_query_destinations():
-    init_db.init()
-    assert _table_exists("query_destinations")
-    assert {
-        "id",
-        "query_name",
-        "dataset_id",
-        "table_id",
-        "origin",
-        "stale",
-        "last_error",
-        "last_sync_at",
-        "last_schema",
-        "created_at",
-    } <= _cols("query_destinations")
+@pytest.fixture
+def sample_schedule(store, sample_query):
+    """Create a schedule and return its dict."""
+    row = {
+        "name": "t_seed_sched",
+        "query_name": sample_query,
+        "dataset_id": "t_dataset",
+        "table_id": "t_table",
+        "frequency": "daily",
+        "hour": 0,
+        "minute": 0,
+        "active": True,
+    }
+    return store.create_schedule(row)
+
+
+@pytest.fixture
+def sample_destination(store, sample_query):
+    """Create a destination and return its dict."""
+    from query_registry import upsert_destination
+    return upsert_destination(sample_query, "ds1", "tbl1", "manual")
 
 
 def test_init_is_idempotent_for_destinations():
     init_db.init()
-    count_before = _count("query_destinations")
+    count_before = len(get_store().list_destinations())
     init_db.init()
-    count_after = _count("query_destinations")
+    count_after = len(get_store().list_destinations())
     assert count_before == count_after
 
 
-def test_init_seeds_from_query_schedules():
-    """Seed inserts distinct (query_name, dataset_id, table_id) from query_schedules."""
-    init_db.init()
-    # Clean slate: remove any pre-existing destinations for our test query
-    pg_execute("DELETE FROM query_destinations WHERE query_name = %s", ("t_seed_query",))
-    # Also remove any pre-existing schedule with same PK (name is PK on query_schedules)
-    pg_execute("DELETE FROM query_schedules WHERE name = %s", ("t_seed_sched",))
-    # Seed a schedule row
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_seed_query",),
-    )
-    pg_execute(
-        """
-        INSERT INTO query_schedules (name, query_name, dataset_id, table_id, frequency, hour, minute)
-        VALUES (%s, %s, %s, %s, 'daily', 0, 0)
-        """,
-        ("t_seed_sched", "t_seed_query", "t_dataset", "t_table"),
-    )
-    # Re-init should seed the registry
-    init_db.init()
-    rows = pg_query(
-        "SELECT * FROM query_destinations WHERE query_name = %s",
-        ("t_seed_query",),
-    )
+def test_init_seeds_from_query_schedules(store, sample_query, sample_schedule):
+    """Re-initing config_store seeds distinct (query_name, dataset_id, table_id) from schedules."""
+    # Clear destinations so seeding has something to do
+    store._data["query_destinations"] = []
+    store.seed_destinations_from_schedules()
+    rows = _destinations_for(sample_query)
     assert len(rows) == 1
     assert rows[0]["dataset_id"] == "t_dataset"
     assert rows[0]["table_id"] == "t_table"
@@ -87,79 +80,50 @@ def test_init_seeds_from_query_schedules():
     assert rows[0]["stale"] is False
 
 
-def test_seed_is_idempotent():
-    init_db.init()
-    pg_execute(
-        """
-        INSERT INTO query_schedules (name, query_name, dataset_id, table_id, frequency, hour, minute)
-        VALUES (%s, %s, %s, %s, 'daily', 0, 0)
-        """,
-        ("t_seed_idem", "t_seed_q2", "t_ds2", "t_t2"),
-    )
-    init_db.init()
-    count1 = _count("query_destinations")
-    init_db.init()
-    count2 = _count("query_destinations")
+def test_seed_is_idempotent(store, sample_query):
+    store.create_schedule({
+        "name": "t_seed_idem",
+        "query_name": sample_query,
+        "dataset_id": "t_ds2",
+        "table_id": "t_t2",
+        "frequency": "daily",
+        "hour": 0,
+        "minute": 0,
+        "active": True,
+    })
+    store.seed_destinations_from_schedules()
+    count1 = len(get_store().list_destinations())
+    store.seed_destinations_from_schedules()
+    count2 = len(get_store().list_destinations())
     assert count1 == count2
 
 
-def test_upsert_destination_insert():
+def test_upsert_destination_insert(sample_query):
     from query_registry import upsert_destination
 
-    init_db.init()
-    # Need a query row to satisfy FK
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_upsert_q",),
-    )
-    upsert_destination("t_upsert_q", "ds1", "tbl1", "manual")
-    rows = pg_query(
-        "SELECT * FROM query_destinations WHERE query_name = %s",
-        ("t_upsert_q",),
-    )
+    upsert_destination(sample_query, "ds1", "tbl1", "manual")
+    rows = _destinations_for(sample_query)
     assert len(rows) == 1
     assert rows[0]["dataset_id"] == "ds1"
     assert rows[0]["origin"] == "manual"
 
 
-def test_upsert_destination_update_origin():
+def test_upsert_destination_update_origin(sample_query):
     from query_registry import upsert_destination
 
-    init_db.init()
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_upsert_flip",),
-    )
-    upsert_destination("t_upsert_flip", "ds1", "tbl1", "manual")
-    upsert_destination("t_upsert_flip", "ds1", "tbl1", "schedule")
-    rows = pg_query(
-        "SELECT * FROM query_destinations WHERE query_name = %s",
-        ("t_upsert_flip",),
-    )
+    upsert_destination(sample_query, "ds1", "tbl1", "manual")
+    upsert_destination(sample_query, "ds1", "tbl1", "schedule")
+    rows = _destinations_for(sample_query)
     assert len(rows) == 1
     assert rows[0]["origin"] == "schedule"
 
 
-def test_list_destinations():
+def test_list_destinations(sample_query):
     from query_registry import list_destinations, upsert_destination
 
-    init_db.init()
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_list_q",),
-    )
-    upsert_destination("t_list_q", "ds1", "tbl1", "manual")
-    upsert_destination("t_list_q", "ds2", "tbl2", "schedule")
-    rows = list_destinations("t_list_q")
+    upsert_destination(sample_query, "ds1", "tbl1", "manual")
+    upsert_destination(sample_query, "ds2", "tbl2", "schedule")
+    rows = list_destinations(sample_query)
     assert len(rows) == 2
     datasets = {r["dataset_id"] for r in rows}
     assert datasets == {"ds1", "ds2"}
@@ -168,76 +132,46 @@ def test_list_destinations():
 def test_list_destinations_unknown_query():
     from query_registry import list_destinations
 
-    init_db.init()
     rows = list_destinations("t_noexist")
     assert rows == []
 
 
-def test_mark_ok_and_stale():
+def test_mark_ok_and_stale(sample_query):
     from query_registry import upsert_destination, mark_ok, mark_stale
 
-    init_db.init()
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_mark_q",),
-    )
-    upsert_destination("t_mark_q", "ds1", "tbl1", "manual")
-    row = pg_query(
-        "SELECT id FROM query_destinations WHERE query_name = %s",
-        ("t_mark_q",),
-    )[0]
-    dest_id = row["id"]
+    dest = upsert_destination(sample_query, "ds1", "tbl1", "manual")
+    dest_id = dest["id"]
 
     mark_stale(dest_id, "connection error")
-    row = pg_query(
-        "SELECT stale, last_error FROM query_destinations WHERE id = %s",
-        (dest_id,),
-    )[0]
+    row = [d for d in get_store().list_destinations() if d["id"] == dest_id][0]
     assert row["stale"] is True
     assert row["last_error"] == "connection error"
 
     schema = [{"name": "col1", "type": "STRING"}]
     mark_ok(dest_id, schema)
-    row = pg_query(
-        "SELECT stale, last_error, last_schema FROM query_destinations WHERE id = %s",
-        (dest_id,),
-    )[0]
+    row = [d for d in get_store().list_destinations() if d["id"] == dest_id][0]
     assert row["stale"] is False
     assert row["last_error"] is None
     assert row["last_schema"] == schema
 
 
-def test_seed_with_zero_schedules():
+def test_seed_with_zero_schedules(store):
     """Seeding when query_schedules has no matching rows is a no-op."""
-    init_db.init()
-    # Ensure no t_* schedules exist
-    pg_execute("DELETE FROM query_schedules WHERE name LIKE 't\\_%' ESCAPE '\\'")
-    pg_execute("DELETE FROM query_destinations WHERE query_name LIKE 't\\_%' ESCAPE '\\'")
-    count_before = _count("query_destinations")
-    init_db.init()
-    count_after = _count("query_destinations")
+    store._data["query_destinations"] = []
+    count_before = len(get_store().list_destinations())
+    store.seed_destinations_from_schedules()
+    count_after = len(get_store().list_destinations())
     assert count_before == count_after
 
 
-def test_fk_cascade_on_delete():
-    """Deleting an odoo_queries row should cascade to its destinations."""
+def test_deactivate_query_cascades_to_destinations(sample_query):
+    """Deactivating a query deletes its destinations."""
     from query_registry import upsert_destination
+    from config_store import get_store
 
-    init_db.init()
-    pg_execute(
-        """
-        INSERT INTO odoo_queries (name, description, model, method, domain, fields, limit_val)
-        VALUES (%s, '', 'res.partner', 'search_read', '[]'::jsonb, '[]'::jsonb, 100)
-        """,
-        ("t_cascade_q",),
-    )
-    upsert_destination("t_cascade_q", "ds1", "tbl1", "manual")
-    pg_execute("DELETE FROM odoo_queries WHERE name = %s", ("t_cascade_q",))
-    rows = pg_query(
-        "SELECT * FROM query_destinations WHERE query_name = %s",
-        ("t_cascade_q",),
-    )
-    assert rows == []
+    upsert_destination(sample_query, "ds1", "tbl1", "manual")
+    assert _destinations_for(sample_query)
+    get_store().deactivate_query(sample_query)
+    assert _destinations_for(sample_query) == []
+
+

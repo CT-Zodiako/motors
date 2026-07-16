@@ -16,18 +16,31 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from db import execute as pg_execute  # noqa: E402
 from main import app  # noqa: E402
 
 TEST_PREFIX = "t_"
 
 
+def _pg_available() -> bool:
+    """Best-effort check: can we connect to the configured PostgreSQL?"""
+    try:
+        from db import query as pg_query
+        pg_query("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
 @pytest.fixture(scope="session", autouse=True)
 def migrated_db():
-    """Guarantee the schema (incl. query-categories migration) exists before any API test."""
-    import init_db
+    """Guarantee the schema (incl. query-categories migration) exists before any API test.
 
-    init_db.init()
+    If PostgreSQL is not reachable, skip schema setup; tests that require PG will fail
+    deterministically downstream rather than here.
+    """
+    if _pg_available():
+        import init_db
+        init_db.init()
     yield
 
 
@@ -53,7 +66,10 @@ def store():
 @pytest.fixture(autouse=True)
 def cleanup():
     yield
+    if not _pg_available():
+        return
     # FK order: queries reference categories, so delete queries first.
+    from db import execute as pg_execute
     pg_execute("DELETE FROM odoo_queries WHERE name LIKE 't\\_%' ESCAPE '\\'")
     pg_execute(
         "DELETE FROM query_categories WHERE name LIKE 't\\_%' ESCAPE '\\'"
