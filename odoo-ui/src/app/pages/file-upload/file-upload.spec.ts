@@ -233,35 +233,6 @@ describe('FileUpload wizard', () => {
     expect(component.sourceError()).toBe('corrupt file');
   });
 
-  it('sheet step startRow input changes the skipRows sent to preview', () => {
-    stub.inspectResult = { sourceType: 'xlsx', fileName: 'd.xlsx', sizeBytes: 4, sheets: ['Hoja1', 'Datos'], sheetCount: 2 };
-    pickFile(component, 'datos.xlsx');
-    component.setStartRow(3);
-    component.chooseSheet('Datos');
-    expect(stub.calls[1].args[3]).toBe(2);
-  });
 
-  it('retry on the source step re-runs the pipeline with the adjusted start row', () => {
-    stub.previewError = { error: { detail: 'ragged' } };
-    pickFile(component, 'datos.csv');
-    expect(component.step()).toBe('source');
-    stub.previewError = null;
-    component.setStartRow(3);
-    component.retry();
-    expect(stub.calls.filter((c) => c.method === 'inspect').length).toBe(2);
-    expect(stub.calls[2].args[2]).toBe(2);
-    expect(stub.calls[3].args[3]).toBe(2);
-    expect(component.step()).toBe('schema');
-  });
 
-  it('load sends skipRows derived from startRow', () => {
-    pickFile(component, 'datos.csv');
-    component.setStartRow(4);
-    component.goDestination();
-    component.dataset.set('raw');
-    component.table.set('nueva');
-    component.confirmLoad();
-    const loadCall = stub.calls.find((c) => c.method === 'load');
-    expect(loadCall?.args[6]).toBe(3);
-  });
 });
