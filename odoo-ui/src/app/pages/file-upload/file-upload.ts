@@ -59,7 +59,6 @@ export class FileUpload {
   datasets = signal<DatasetOption[]>([]);
   dataset = signal<string | null>(null);
   table = signal('');
-  startRow = signal(1);
   busy = signal(false);
   error = signal('');
   result = signal<LoadResponse | null>(null);
@@ -116,7 +115,7 @@ export class FileUpload {
 
   private runPipeline(f: File, st: SourceType) {
     this.busy.set(true);
-    this.svc.inspect(f, st, this.skipRows || undefined).subscribe({
+    this.svc.inspect(f, st, undefined).subscribe({
       next: (resp) => {
         this.busy.set(false);
         this.inspect.set(resp);
@@ -132,15 +131,6 @@ export class FileUpload {
         this.sourceError.set(this.errorDetail(e));
       },
     });
-  }
-
-  setStartRow(value: unknown) {
-    const n = Number(value);
-    this.startRow.set(Number.isInteger(n) && n >= 1 ? n : 1);
-  }
-
-  private get skipRows(): number {
-    return this.startRow() - 1;
   }
 
   retry() {
@@ -191,7 +181,7 @@ export class FileUpload {
     this.busy.set(true);
     this.error.set('');
     this.svc
-      .load(f, st, this.selectedSheet() ?? undefined, this.columns(), ds, tbl, this.skipRows || undefined)
+      .load(f, st, this.selectedSheet() ?? undefined, this.columns(), ds, tbl, undefined)
       .subscribe({
       next: (resp) => {
         this.busy.set(false);
@@ -230,7 +220,6 @@ export class FileUpload {
     this.datasets.set([]);
     this.dataset.set(null);
     this.table.set('');
-    this.startRow.set(1);
     this.busy.set(false);
     this.error.set('');
     this.result.set(null);
@@ -242,7 +231,7 @@ export class FileUpload {
     if (!f || !st) return;
     this.busy.set(true);
     const sheet = this.selectedSheet() ?? undefined;
-    this.svc.preview(f, st, sheet, this.skipRows || undefined).subscribe({
+    this.svc.preview(f, st, sheet, undefined).subscribe({
       next: (resp) => {
         this.busy.set(false);
         if (sheet) this.previewCache.set(this.cacheKey(sheet), resp);
@@ -274,6 +263,6 @@ export class FileUpload {
 
   private cacheKey(sheet: string): string {
     const f = this.file();
-    return `${f?.name}:${f?.size}:${sheet}:${this.skipRows}`;
+    return `${f?.name}:${f?.size}:${sheet}`;
   }
 }
