@@ -316,3 +316,65 @@ describe('QueryCreate (field card metadata)', () => {
     expect(amount.getAttribute('title')).toBeNull();
   });
 });
+
+describe('QueryCreate (selected model context banner)', () => {
+  let http: HttpTestingController;
+  let component: QueryCreate;
+  let fixture: ComponentFixture<QueryCreate>;
+  let editState: QueryEditStateService;
+
+  beforeEach(() => {
+    const s = setup();
+    http = s.http;
+    component = s.component;
+    fixture = s.fixture;
+    editState = TestBed.inject(QueryEditStateService);
+  });
+
+  afterEach(() => {
+    http.match(() => true).forEach((r) => {
+      if (r.request.url.includes('/explore/models')) r.flush({ total: 0, models: [] });
+      else if (r.request.url.includes('/categories/')) r.flush([]);
+      else if (r.request.url.includes('/explore/fields/')) r.flush({ fields: {} });
+      else r.flush({});
+    });
+    http.verify();
+    TestBed.resetTestingModule();
+  });
+
+  const banner = (): HTMLElement | null =>
+    fixture.nativeElement.querySelector('.model-context-banner');
+
+  it('is hidden until a model is selected', () => {
+    expect(component.selectedModel()).toBeNull();
+    expect(banner()).toBeNull();
+  });
+
+  it('shows the selected model label and technical name, and stays visible across steps', () => {
+    component.selectModel({ name: 'Sale Order', model: 'sale.order' });
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush(RICH_FIELDS_RESPONSE);
+    fixture.detectChanges();
+
+    expect(banner()).toBeTruthy();
+    expect(banner()!.querySelector('.model-context-label')!.textContent).toContain('Sale Order');
+    expect(banner()!.querySelector('.model-context-code')!.textContent).toContain('sale.order');
+
+    component.goTo(2);
+    fixture.detectChanges();
+    expect(banner()).toBeTruthy();
+
+    component.goTo(3);
+    fixture.detectChanges();
+    expect(banner()).toBeTruthy();
+  });
+
+  it('shows the model being edited in edit mode', () => {
+    editState.beginEdit(mockQuery);
+    component.ngOnInit();
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({ fields: {} });
+    fixture.detectChanges();
+
+    expect(banner()).toBeTruthy();
+    expect(banner()!.querySelector('.model-context-code')!.textContent).toContain('sale.order');
+  });
+});

@@ -10,6 +10,14 @@
     </div>
   }
 
+  @if (selectedModel(); as m) {
+    <div class="model-context-banner">
+      <span class="model-context-icon">🗂️</span>
+      <span class="model-context-label">{{ m.label }}</span>
+      <code class="model-context-code">{{ m.model }}</code>
+    </div>
+  }
+
   <p-stepper [value]="activeStep()" styleClass="custom-stepper">
 
     <!-- PASO 1: MODELO -->
