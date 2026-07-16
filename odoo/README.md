@@ -87,7 +87,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/ruta/absoluta/a/service-account.json
 
 ## Configuración de BigQuery
 
-El sync requiere una cuenta de servicio de Google Cloud con permisos de lectura sobre los datasets/tables deseados. Recomendado:
+La app se conecta a BigQuery usando una cuenta de servicio de Google Cloud. Recomendado:
 
 1. Crear o descargar la clave JSON de la cuenta de servicio.
 2. Configurar la variable de entorno `GOOGLE_APPLICATION_CREDENTIALS` apuntando a la clave **fuera del repositorio**.
@@ -123,7 +123,6 @@ Documentación interactiva: `http://localhost:8000/docs`
 | `GET` | `/explore/fields/{model}` | Lista los campos de un modelo |
 | `GET` | `/bigquery/datasets` | Lista los datasets accesibles en BigQuery |
 | `GET` | `/bigquery/tables/{dataset_id}` | Lista las tablas de un dataset |
-| `POST` | `/bigquery/sync/{dataset_id}/{table_id}` | Sincroniza una tabla de BigQuery a PostgreSQL |
 
 ### Parámetro opcional de columnas en exports
 
