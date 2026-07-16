@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from datetime import datetime
 
 from config_store import get_store, ConflictError, NotFoundError, ValidationError
 from routers.categories import category_exists, general_category_id
@@ -75,6 +76,32 @@ class QueryPatchIn(BaseModel):
     name: str | None = None
     model: str | None = None
     method: str | None = None
+
+
+class QueryDestinationResponse(BaseModel):
+    id: int
+    query_name: str
+    dataset_id: str
+    table_id: str
+    origin: str | None
+    stale: bool
+    last_error: str | None
+    last_sync_at: datetime | None
+    last_schema: list[dict] | None
+    created_at: datetime
+
+
+@router.get("/{name}/destination", response_model=QueryDestinationResponse)
+def get_query_destination(name: str):
+    from query_registry import get_destination
+
+    row = get_store().get_query(name)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Query '{name}' not found")
+    dest = get_destination(name)
+    if dest is None:
+        raise HTTPException(status_code=404, detail=f"No destination for query '{name}'")
+    return dest
 
 
 @router.patch("/{name}")
