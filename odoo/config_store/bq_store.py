@@ -369,13 +369,17 @@ class BigQueryConfigStore:
     # destinations
     # ------------------------------------------------------------------
 
-    def list_destinations(self) -> list[dict]:
+    def list_destinations(self, query_name: str | None = None) -> list[dict]:
         cached = self._cache.get("destinations")
-        if cached is not None:
+        if cached is not None and query_name is None:
             return cached
-        rows = self._query(sql.SQL_LIST_DESTINATIONS())
+        if query_name is not None:
+            rows = self._query(sql.SQL_LIST_DESTINATIONS_BY_QUERY(), [_string_param("query_name", query_name)])
+        else:
+            rows = self._query(sql.SQL_LIST_DESTINATIONS())
         decoded = [codecs.decode_row("query_destinations", r) for r in rows]
-        self._cache.set("destinations", decoded)
+        if query_name is None:
+            self._cache.set("destinations", decoded)
         return decoded
 
     def upsert_destination(self, dest: dict) -> dict:
@@ -384,29 +388,23 @@ class BigQueryConfigStore:
         self._cache.invalidate_destinations()
         return dest
 
-    def mark_destination_stale(self, query_name: str, dataset_id: str, table_id: str, error: str | None = None) -> None:
-        params = [
-            _bool_param("stale", True),
-            _string_param("last_error", error),
-            _string_param("query_name", query_name),
-            _string_param("dataset_id", dataset_id),
-            _string_param("table_id", table_id),
-        ]
-        self._query(sql.SQL_UPDATE_DESTINATION_STALE(), params)
-        self._cache.invalidate_destinations()
-
-    def mark_destination_ok(self, query_name: str, dataset_id: str, table_id: str, schema: dict | None = None) -> None:
-        # We need to update stale=False, last_error=None, last_sync_at=NOW, last_schema=schema
-        # Use MERGE or a custom UPDATE
-        # For simplicity, let's use MERGE with the existing row + updates
-        existing = self._query(sql.SQL_GET_DESTINATION(), [
-            _string_param("query_name", query_name),
-            _string_param("dataset_id", dataset_id),
-            _string_param("table_id", table_id),
-        ])
+    def mark_destination_stale(self, dest_id: int, error: str | None = None) -> None:
+        existing = self._query(sql.SQL_GET_DESTINATION_BY_ID(), [_int64_param("id", dest_id)])
         if not existing:
             return
-        row = dict(existing[0])
+        row = codecs.decode_row("query_destinations", existing[0])
+        row["stale"] = True
+        row["last_error"] = error
+        row["last_sync_at"] = None
+        params = _build_params("query_destinations", row)
+        self._query(sql.SQL_MERGE_DESTINATION(), params)
+        self._cache.invalidate_destinations()
+
+    def mark_destination_ok(self, dest_id: int, schema: dict | None = None) -> None:
+        existing = self._query(sql.SQL_GET_DESTINATION_BY_ID(), [_int64_param("id", dest_id)])
+        if not existing:
+            return
+        row = codecs.decode_row("query_destinations", existing[0])
         row["stale"] = False
         row["last_error"] = None
         row["last_sync_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -471,3 +469,4 @@ class BigQueryConfigStore:
         )
         job = self._client.load_table_from_file(buf, table_ref, job_config=job_config)
         job.result()
+

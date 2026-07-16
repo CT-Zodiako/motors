@@ -138,6 +138,8 @@ WHERE id = @id
 # Destinations
 # ---------------------------------------------------------------------------
 SQL_LIST_DESTINATIONS = lambda: f"SELECT * FROM `{_t('query_destinations')}` ORDER BY id"
+SQL_LIST_DESTINATIONS_BY_QUERY = lambda: f"SELECT * FROM `{_t('query_destinations')}` WHERE query_name = @query_name ORDER BY id"
+SQL_GET_DESTINATION_BY_ID = lambda: f"SELECT * FROM `{_t('query_destinations')}` WHERE id = @id"
 SQL_GET_DESTINATION = lambda: f"""
 SELECT * FROM `{_t('query_destinations')}`
 WHERE query_name = @query_name AND dataset_id = @dataset_id AND table_id = @table_id
@@ -154,9 +156,10 @@ WHEN MATCHED THEN UPDATE SET
 WHEN NOT MATCHED THEN INSERT (id, query_name, dataset_id, table_id, origin, stale, last_error, last_sync_at, last_schema, created_at)
 VALUES (source.id, source.query_name, source.dataset_id, source.table_id, source.origin, source.stale, source.last_error, source.last_sync_at, source.last_schema, source.created_at)
 """
-SQL_UPDATE_DESTINATION_STALE = lambda: f"""
+SQL_UPDATE_DESTINATION_BY_ID = lambda: f"""
 UPDATE `{_t('query_destinations')}`
-SET stale = @stale, last_error = @last_error
-WHERE query_name = @query_name AND dataset_id = @dataset_id AND table_id = @table_id
+SET stale = @stale, last_error = @last_error, last_sync_at = @last_sync_at, last_schema = PARSE_JSON(@last_schema)
+WHERE id = @id
 """
 SQL_DELETE_DESTINATIONS_BY_QUERY = lambda: f"DELETE FROM `{_t('query_destinations')}` WHERE query_name = @query_name"
+
