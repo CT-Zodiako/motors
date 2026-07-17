@@ -462,6 +462,166 @@ class BigQueryConfigStore:
         return count
 
     # ------------------------------------------------------------------
+    # users
+    # ------------------------------------------------------------------
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        rows = self._query(sql.SQL_GET_USER_BY_EMAIL(), [_string_param("email", email)])
+        if not rows:
+            return None
+        return codecs.decode_row("odoo_users", rows[0])
+
+    def list_users(self) -> list[dict]:
+        cached = self._cache.get("users")
+        if cached is not None:
+            return cached
+        rows = self._query(sql.SQL_LIST_USERS())
+        decoded = [codecs.decode_row("odoo_users", r) for r in rows]
+        self._cache.set("users", decoded)
+        return decoded
+
+    def get_user_by_id(self, user_id: str) -> dict | None:
+        rows = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
+        if not rows:
+            return None
+        return codecs.decode_row("odoo_users", rows[0])
+
+    def create_user(self, row: dict) -> dict:
+        email = row.get("email", "").lower()
+        # Uniqueness check (case-insensitive)
+        dup = self._query(sql.SQL_GET_USER_BY_EMAIL(), [_string_param("email", email)])
+        if dup:
+            raise ConflictError(f"User with email {email} already exists")
+        # Ensure required fields
+        user_row = {
+            "id": row.get("id"),
+            "email": email,
+            "password_hash": row["password_hash"],
+            "role": row.get("role", "user"),
+            "active": row.get("active", True),
+            "created_at": row.get("created_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+            "updated_at": row.get("updated_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+        }
+        params = _build_params("odoo_users", user_row)
+        self._query(sql.SQL_INSERT_USER(), params)
+        self._cache.delete("users"); self._cache.delete("users_count")
+        return self.get_user_by_email(email)
+
+    def update_user_password(self, user_id: str, password_hash: str) -> dict:
+        existing = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
+        if not existing:
+            raise NotFoundError(f"User {user_id} not found")
+        params = [
+            _string_param("password_hash", password_hash),
+            _timestamp_param("updated_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+            _string_param("id", user_id),
+        ]
+        self._query(sql.SQL_UPDATE_USER_PASSWORD(), params)
+        self._cache.delete("users"); self._cache.delete("users_count")
+        user = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
+        return codecs.decode_row("odoo_users", user[0])
+
+    def update_user(self, user_id: str, patch: dict) -> dict:
+        existing = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
+        if not existing:
+            raise NotFoundError(f"User {user_id} not found")
+        params = [
+            _string_param("role", patch.get("role", existing[0].get("role"))),
+            _bool_param("active", patch.get("active", existing[0].get("active"))),
+            _timestamp_param("updated_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+            _string_param("id", user_id),
+        ]
+        self._query(sql.SQL_UPDATE_USER(), params)
+        self._cache.delete("users"); self._cache.delete("users_count")
+        user = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
+        return codecs.decode_row("odoo_users", user[0])
+
+    def count_users(self) -> int:
+        cached = self._cache.get("users_count")
+        if cached is not None:
+            return cached
+        rows = self._query(sql.SQL_COUNT_USERS())
+        count = rows[0]["n"]
+        self._cache.set("users_count", count)
+        return count
+
+    # ------------------------------------------------------------------
+    # permissions
+    # ------------------------------------------------------------------
+
+    def list_permissions(self) -> list[dict]:
+        cached = self._cache.get("permissions")
+        if cached is not None:
+            return cached
+        rows = self._query(sql.SQL_LIST_PERMISSIONS())
+        decoded = [codecs.decode_row("odoo_permissions", r) for r in rows]
+        self._cache.set("permissions", decoded)
+        return decoded
+
+    def get_user_permissions(self, user_id: str) -> set[str]:
+        cached = self._cache.get(f"user_permissions:{user_id}")
+        if cached is not None:
+            return set(cached)
+        rows = self._query(
+            sql.SQL_GET_USER_PERMISSIONS(),
+            [_string_param("user_id", user_id)],
+        )
+        permissions = {r["permission_id"] for r in rows}
+        self._cache.set(f"user_permissions:{user_id}", list(permissions))
+        return permissions
+
+    def assign_user_permission(self, user_id: str, permission_id: str) -> None:
+        # Validate permission exists
+        exists = self._query(
+            sql.SQL_GET_PERMISSION_BY_ID(),
+            [_string_param("id", permission_id)],
+        )
+        if not exists:
+            raise NotFoundError(f"Permission {permission_id} not found")
+        # Idempotent: check if already assigned
+        dup = self._query(
+            sql.SQL_COUNT_USER_PERMISSIONS(),
+            [
+                _string_param("user_id", user_id),
+                _string_param("permission_id", permission_id),
+            ],
+        )
+        if dup[0]["n"] > 0:
+            return
+        params = [
+            _string_param("user_id", user_id),
+            _string_param("permission_id", permission_id),
+            _timestamp_param("created_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+        ]
+        self._query(sql.SQL_INSERT_USER_PERMISSION(), params)
+        self._cache.delete(f"user_permissions:{user_id}")
+
+    def revoke_user_permission(self, user_id: str, permission_id: str) -> None:
+        params = [
+            _string_param("user_id", user_id),
+            _string_param("permission_id", permission_id),
+        ]
+        self._query(sql.SQL_DELETE_USER_PERMISSION(), params)
+        self._cache.delete(f"user_permissions:{user_id}")
+
+    def seed_permission_defaults(self) -> None:
+        existing = self._query(sql.SQL_COUNT_PERMISSIONS())
+        if existing[0]["n"] > 0:
+            return
+        from .bootstrap import _SEED_PERMISSIONS
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for perm in _SEED_PERMISSIONS:
+            row = {
+                "id": perm["id"],
+                "label": perm["label"],
+                "category": perm.get("category"),
+                "created_at": now,
+            }
+            params = _build_params("odoo_permissions", row)
+            self._query(sql.SQL_INSERT_PERMISSION(), params)
+        self._cache.invalidate_permissions()
+
+    # ------------------------------------------------------------------
     # Load-job helper (for bulk/seeds/migration, D9)
     # ------------------------------------------------------------------
 

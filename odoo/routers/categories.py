@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from auth import require_permission
 from config_store import get_store, ConflictError, NotFoundError
 
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -29,12 +30,12 @@ def general_category_id() -> int:
 
 
 @router.get("/")
-def list_categories():
+def list_categories(user: dict = Depends(require_permission("menu.cargar.create"))):
     return get_store().list_categories()
 
 
 @router.post("/", status_code=201)
-def create_category(body: CategoryIn):
+def create_category(body: CategoryIn, user: dict = Depends(require_permission("menu.cargar.create"))):
     try:
         return get_store().create_category(body.name, body.description)
     except ConflictError:
@@ -42,7 +43,7 @@ def create_category(body: CategoryIn):
 
 
 @router.delete("/{category_id}", status_code=204)
-def delete_category(category_id: int):
+def delete_category(category_id: int, user: dict = Depends(require_permission("menu.cargar.create"))):
     try:
         get_store().delete_category(category_id)
     except NotFoundError:
@@ -50,5 +51,3 @@ def delete_category(category_id: int):
     except ConflictError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return None
-
-

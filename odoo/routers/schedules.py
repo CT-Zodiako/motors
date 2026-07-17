@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 from datetime import datetime
 
+from auth import require_permission
 from config_store import get_store
 from query_registry import mark_other_destinations_stale, upsert_destination
 from routers.runner import _fetch_registered, fetch_query_rows
@@ -77,17 +78,17 @@ class ScheduleRunResponse(BaseModel):
 
 
 @router.get("", response_model=list[ScheduleResponse])
-def list_schedules():
+def list_schedules(user: dict = Depends(require_permission("menu.consultar.programar"))):
     return get_store().list_schedules()
 
 
 @router.get("/{schedule_id}/runs", response_model=list[ScheduleRunResponse])
-def list_runs(schedule_id: int):
+def list_runs(schedule_id: int, user: dict = Depends(require_permission("menu.consultar.programar"))):
     return get_store().list_runs(schedule_id)
 
 
 @router.post("", response_model=ScheduleResponse)
-def create_schedule(payload: ScheduleCreate):
+def create_schedule(payload: ScheduleCreate, user: dict = Depends(require_permission("menu.consultar.programar"))):
     _validate_schedule_fields(payload.frequency, payload)
     _ensure_query_exists(payload.query_name)
     payload_dict = payload.model_dump()
@@ -100,7 +101,7 @@ def create_schedule(payload: ScheduleCreate):
 
 
 @router.patch("/{schedule_id}", response_model=ScheduleResponse)
-def update_schedule(schedule_id: int, payload: ScheduleUpdate):
+def update_schedule(schedule_id: int, payload: ScheduleUpdate, user: dict = Depends(require_permission("menu.consultar.programar"))):
     current = get_store().get_schedule(schedule_id)
     if current is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -130,7 +131,7 @@ def update_schedule(schedule_id: int, payload: ScheduleUpdate):
 
 
 @router.delete("/{schedule_id}")
-def delete_schedule(schedule_id: int):
+def delete_schedule(schedule_id: int, user: dict = Depends(require_permission("menu.consultar.programar"))):
     if get_store().get_schedule(schedule_id) is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
     _unregister_job(schedule_id)
@@ -139,7 +140,7 @@ def delete_schedule(schedule_id: int):
 
 
 @router.post("/{schedule_id}/run")
-def run_schedule_now(schedule_id: int):
+def run_schedule_now(schedule_id: int, user: dict = Depends(require_permission("menu.consultar.programar"))):
     existing = get_store().get_schedule(schedule_id)
     if existing is None:
         raise HTTPException(status_code=404, detail="Schedule not found")
@@ -287,5 +288,3 @@ def _execute_schedule(schedule: dict):
             "message": str(e),
         })
         return {"status": "error", "message": str(e)}
-
-

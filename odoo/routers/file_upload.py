@@ -9,11 +9,12 @@ PR2 scope: inspect + preview. PR3 adds the load endpoint.
 import json
 from datetime import date, datetime, time
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from google.api_core.exceptions import Conflict, NotFound
 from google.cloud.bigquery import LoadJobConfig, SchemaField, Table, WriteDisposition
 
 import bq_schema
+from auth import require_permission
 from bigquery_client import get_bigquery_client
 from routers.bigquery import MAX_UPLOAD_ROWS, _validate_identifier
 
@@ -173,6 +174,7 @@ async def inspect_file(
     file: UploadFile = File(...),
     source_type: str = Form(..., alias="sourceType"),
     skip_rows: int = Form(0, alias="skipRows"),
+    user: dict = Depends(require_permission("menu.cargar.upload")),
 ):
     if skip_rows < 0:
         raise HTTPException(status_code=400, detail=f"skipRows must be >= 0, got {skip_rows}")
@@ -201,6 +203,7 @@ async def preview_file(
     source_type: str = Form(..., alias="sourceType"),
     sheet: str | None = Form(None),
     skip_rows: int = Form(0, alias="skipRows"),
+    user: dict = Depends(require_permission("menu.cargar.upload")),
 ):
     if skip_rows < 0:
         raise HTTPException(status_code=400, detail=f"skipRows must be >= 0, got {skip_rows}")
@@ -237,6 +240,7 @@ async def load_file(
     dataset: str = Form(...),
     table: str = Form(...),
     skip_rows: int = Form(0, alias="skipRows"),
+    user: dict = Depends(require_permission("menu.cargar.upload")),
 ):
     if skip_rows < 0:
         raise HTTPException(status_code=400, detail=f"skipRows must be >= 0, got {skip_rows}")

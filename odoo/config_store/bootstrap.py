@@ -56,6 +56,25 @@ _SEED_QUERIES: list[dict[str, Any]] = [
 ]
 
 
+# -----------------------------------------------------------------------------
+# V8: seed permissions for the menu system (idempotent)
+# -----------------------------------------------------------------------------
+_SEED_PERMISSIONS: list[dict[str, Any]] = [
+    {"id": "menu.consultar.queries", "label": "Ver listado de queries", "category": "consultar"},
+    {"id": "menu.consultar.ejecutar", "label": "Ejecutar queries", "category": "consultar"},
+    {"id": "menu.consultar.programar", "label": "Programar tareas", "category": "consultar"},
+    {"id": "menu.cargar.create", "label": "Crear nuevo query", "category": "cargar"},
+    {"id": "menu.cargar.upload", "label": "Cargar archivos", "category": "cargar"},
+    {"id": "menu.cuenta.change_password", "label": "Cambiar contraseña", "category": "cuenta"},
+    {"id": "menu.admin.usuarios", "label": "Administrar usuarios", "category": "admin"},
+]
+
+
+def seed_permission_defaults(store: Any) -> None:
+    """Idempotent seeding of menu permissions."""
+    store.seed_permission_defaults()
+
+
 def ensure_schema(store: Any) -> None:
     """Idempotent schema creation via store.ensure_schema()."""
     store.ensure_schema()

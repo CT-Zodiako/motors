@@ -1,0 +1,111 @@
+<div class="admin-container">
+  <div class="admin-header">
+    <h2 class="admin-title">Administración de usuarios</h2>
+    <p-button label="Nuevo usuario" icon="pi pi-plus" (onClick)="openCreate()" />
+  </div>
+
+  <p-table [value]="users()" [loading]="loading()" [paginator]="true" [rows]="10"
+    styleClass="p-datatable-sm">
+    <ng-template pTemplate="header">
+      <tr>
+        <th>Email</th>
+        <th>Rol</th>
+        <th>Activo</th>
+        <th>Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-user>
+      <tr>
+        <td>{{ user.email }}</td>
+        <td>
+          <p-tag [value]="user.role" [severity]="user.role === 'admin' ? 'danger' : 'info'" />
+        </td>
+        <td>
+          <p-tag [value]="user.active ? 'Sí' : 'No'" [severity]="user.active ? 'success' : 'warn'" />
+        </td>
+        <td>
+          <p-button icon="pi pi-pencil" severity="secondary" [text]="true" (onClick)="openEdit(user)" pTooltip="Editar" />
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+
+  <!-- Single create/edit dialog -->
+  <p-dialog [(visible)]="dialogVisible" [header]="dialogTitle()" [modal]="true" [style]="{ width: '900px' }">
+    @if (selectedUser(); as u) {
+      <form (ngSubmit)="saveUser()">
+        <div class="dialog-layout">
+          <!-- User data -->
+          <div class="dialog-section">
+            <h4 class="section-title">Datos del usuario</h4>
+
+            <div class="form-field">
+              <label for="email">Email</label>
+              <input id="email" type="email" pInputText [(ngModel)]="u.email" name="email" required [disabled]="isEditing()" />
+            </div>
+
+            @if (!isEditing()) {
+              <div class="form-field">
+                <label for="password">Contraseña</label>
+                <input id="password" type="password" pInputText [(ngModel)]="u.password" name="password" required />
+              </div>
+            }
+
+            <div class="form-field">
+              <label for="role">Rol</label>
+              <p-select id="role" [options]="roleOptions" [(ngModel)]="u.role" name="role" optionLabel="label" optionValue="value" />
+            </div>
+
+            <div class="form-field active-toggle">
+              <label>Estado del usuario</label>
+              <div class="active-toggle-row">
+                <p-toggleswitch [(ngModel)]="u.active" name="active" />
+                @if (u.active) {
+                  <p-tag value="Activo" severity="success" />
+                } @else {
+                  <p-tag value="Inactivo" severity="danger" />
+                }
+              </div>
+              <small class="hint">Los usuarios inactivos no pueden iniciar sesión.</small>
+            </div>
+          </div>
+
+          <!-- Permissions (only when editing) -->
+          @if (isEditing()) {
+            <div class="dialog-section permissions-section">
+              <h4 class="section-title">Permisos de menú</h4>
+
+              @if (permissionGroups(); as groups) {
+                <div class="permissions-scroll">
+                  @for (group of groups; track group.category) {
+                    <div class="permission-group">
+                      <h5 class="permission-group-title">{{ group.category | titlecase }}</h5>
+                      <div class="permissions-grid">
+                        @for (perm of group.permissions; track perm.id) {
+                          <div class="permission-item">
+                            <p-checkbox
+                              [ngModel]="selectedPermissions()[perm.id]"
+                              (ngModelChange)="togglePermission(perm.id, $event)"
+                              [name]="'perm-' + perm.id"
+                              [binary]="true"
+                            />
+                            <label [for]="'perm-' + perm.id">{{ perm.label }}</label>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="dialog-actions">
+          <p-button label="Cancelar" severity="secondary" (onClick)="dialogVisible.set(false)" />
+          <p-button type="submit" label="Guardar" icon="pi pi-check" />
+        </div>
+      </form>
+    }
+  </p-dialog>
+</div>

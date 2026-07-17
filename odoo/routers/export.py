@@ -5,9 +5,10 @@ import tempfile
 from typing import Literal
 
 import openpyxl
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse, FileResponse
 
+from auth import require_permission
 from config_store import get_store
 from odoo_client import execute as odoo_execute
 
@@ -127,7 +128,7 @@ def _resolve_columns(all_columns: list[str], param: str | None) -> list[str]:
 # ─── CSV ──────────────────────────────────────────────────────────────────────
 
 @router.get("/csv/{name}")
-def export_csv(name: str, columns: str | None = Query(None)):
+def export_csv(name: str, columns: str | None = Query(None), user: dict = Depends(require_permission("menu.consultar.ejecutar"))):
     _, data = _fetch_data(name)
     if not data:
         raise HTTPException(status_code=204, detail="No data to export")
@@ -150,7 +151,7 @@ def export_csv(name: str, columns: str | None = Query(None)):
 # ─── EXCEL ────────────────────────────────────────────────────────────────────
 
 @router.get("/excel/{name}")
-def export_excel(name: str, columns: str | None = Query(None)):
+def export_excel(name: str, columns: str | None = Query(None), user: dict = Depends(require_permission("menu.consultar.ejecutar"))):
     registered, data = _fetch_data(name)
     if not data:
         raise HTTPException(status_code=204, detail="No data to export")
@@ -196,6 +197,7 @@ def export_sql(
     name: str,
     target: Literal["postgres", "oracle"] = Query("postgres"),
     columns: str | None = Query(None),
+    user: dict = Depends(require_permission("menu.consultar.ejecutar")),
 ):
     registered, data = _fetch_data(name)
     if not data:
@@ -232,7 +234,7 @@ def export_sql(
 
 
 @router.post("/sql-preview")
-def sql_preview(payload: dict = Body(...)) -> dict:
+def sql_preview(payload: dict = Body(...), user: dict = Depends(require_permission("menu.consultar.ejecutar"))) -> dict:
     table = payload.get("table")
     columns = payload.get("columns")
     rows = payload.get("rows", [])
@@ -257,4 +259,3 @@ def sql_preview(payload: dict = Body(...)) -> dict:
         lines.append(f"INSERT INTO {table} ({col_list}) VALUES ({vals});")
 
     return {"sql": "\n".join(lines)}
-

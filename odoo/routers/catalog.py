@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
 
+from auth import require_permission
 from config_store import get_store, ConflictError, NotFoundError, ValidationError
 from routers.categories import category_exists, general_category_id
 
@@ -24,12 +25,12 @@ class CategoryPatchIn(BaseModel):
 
 
 @router.get("/")
-def list_queries():
+def list_queries(user: dict = Depends(require_permission("menu.consultar.queries"))):
     return get_store().list_queries()
 
 
 @router.get("/{name}")
-def get_query(name: str):
+def get_query(name: str, user: dict = Depends(require_permission("menu.consultar.queries"))):
     row = get_store().get_query(name)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found")
@@ -37,7 +38,7 @@ def get_query(name: str):
 
 
 @router.post("/", status_code=201)
-def register_query(body: QueryIn):
+def register_query(body: QueryIn, user: dict = Depends(require_permission("menu.cargar.create"))):
     # Category validation: provided id must exist; omitted means General on INSERT only.
     if body.category_id is not None and not category_exists(body.category_id):
         raise HTTPException(
@@ -93,7 +94,7 @@ class QueryDestinationResponse(BaseModel):
 
 
 @router.get("/{name}/destination", response_model=QueryDestinationResponse)
-def get_query_destination(name: str):
+def get_query_destination(name: str, user: dict = Depends(require_permission("menu.consultar.queries"))):
     from query_registry import get_destination
 
     row = get_store().get_query(name)
@@ -106,7 +107,7 @@ def get_query_destination(name: str):
 
 
 @router.patch("/{name}")
-def update_query(name: str, body: QueryPatchIn):
+def update_query(name: str, body: QueryPatchIn, user: dict = Depends(require_permission("menu.cargar.create"))):
     current = get_store().get_query(name)
     if current is None:
         raise HTTPException(status_code=404, detail=f"Query '{name}' not found")
@@ -157,7 +158,7 @@ def update_query(name: str, body: QueryPatchIn):
 
 
 @router.delete("/{name}")
-def delete_query(name: str):
+def delete_query(name: str, user: dict = Depends(require_permission("menu.cargar.create"))):
     try:
         get_store().delete_query(name)
     except NotFoundError:

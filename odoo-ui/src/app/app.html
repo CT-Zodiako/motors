@@ -1,41 +1,79 @@
 <p-toast />
 
-<div class="layout">
-  <aside class="sidebar">
-    <div class="sidebar-brand">
-      <div class="sidebar-logo">
-        <i class="pi pi-link"></i>
-        Odoo Bridge
-      </div>
-      <p class="sidebar-tagline">Conectá Odoo con BigQuery de forma segura</p>
-    </div>
-
-    <nav class="sidebar-nav">
-      @for (group of navGroups; track group.label) {
-        <div class="nav-group">
-          <span class="nav-group-label">{{ group.label }}</span>
-          @for (item of group.items; track item.id) {
-            <button
-              class="nav-item"
-              [class.active]="activeTab() === item.id"
-              (click)="setTab(item.id)"
-            >
-              <i class="pi {{ item.icon }}"></i>
-              {{ item.label }}
-            </button>
-          }
+@if (!authenticated()) {
+  <app-login />
+} @else {
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-logo">
+          <i class="pi pi-link"></i>
+          Odoo Bridge
         </div>
-      }
-    </nav>
+        <p class="sidebar-tagline">Conectá Odoo con BigQuery de forma segura</p>
+      </div>
 
-  </aside>
+      <nav class="sidebar-nav">
+        @if (visibleMenu().length === 0) {
+          <div class="nav-empty">
+            <i class="pi pi-lock"></i>
+            <span>No tenés menús habilitados</span>
+          </div>
+        }
 
-  <main class="content">
-    @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
-    @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
-    @if (activeTab() === 'runner')   { <app-query-runner /> }
+        @for (group of visibleMenu(); track group.label) {
+          <div class="nav-group">
+            <span class="nav-group-label">{{ group.label }}</span>
+            @for (item of group.children; track item.id) {
+              <button
+                class="nav-item"
+                [class.active]="activeTab() === item.id"
+                (click)="setTab(item.id!)"
+              >
+                <i class="pi {{ item.icon }}"></i>
+                {{ item.label }}
+              </button>
+            }
+          </div>
+        }
+      </nav>
 
-    @if (activeTab() === 'upload') { <app-file-upload /> }
-    @if (activeTab() === 'schedules') { <app-schedule-manager /> }
-  </main>
-</div>
+      <div class="sidebar-footer">
+        @if (user(); as u) {
+          <div class="user-info">
+            <p-avatar icon="pi pi-user" shape="circle" />
+            <div class="user-meta">
+              <span class="user-email">{{ u.email }}</span>
+              <span class="user-role">{{ u.role }}</span>
+            </div>
+          </div>
+        }
+        @for (item of visibleAccountMenu(); track item.id) {
+          <button
+            class="nav-item"
+            [class.active]="activeTab() === item.id"
+            (click)="changePassword()"
+          >
+            <i class="pi {{ item.icon }}"></i>
+            {{ item.label }}
+          </button>
+        }
+        <button class="nav-item" (click)="logout()">
+          <i class="pi pi-sign-out"></i>
+          Cerrar sesión
+        </button>
+      </div>
+    </aside>
+
+    <main class="content">
+      @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
+      @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
+      @if (activeTab() === 'runner')   { <app-query-runner /> }
+
+      @if (activeTab() === 'upload') { <app-file-upload /> }
+      @if (activeTab() === 'schedules') { <app-schedule-manager /> }
+      @if (activeTab() === 'admin') { <app-user-admin /> }
+      @if (activeTab() === 'change-password') { <app-change-password /> }
+    </main>
+  </div>
+}

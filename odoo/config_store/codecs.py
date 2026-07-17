@@ -71,6 +71,26 @@ TABLE_SCHEMAS: dict[str, list[dict[str, Any]]] = {
         {"name": "last_schema", "type": "JSON", "mode": "NULLABLE"},
         {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
     ],
+    "odoo_users": [
+        {"name": "id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "email", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "password_hash", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "role", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
+        {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+        {"name": "updated_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+    ],
+    "odoo_permissions": [
+        {"name": "id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "label", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "category", "type": "STRING", "mode": "NULLABLE"},
+        {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+    ],
+    "odoo_user_permissions": [
+        {"name": "user_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "permission_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+    ],
 }
 
 # ---------------------------------------------------------------------------

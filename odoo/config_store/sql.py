@@ -50,6 +50,68 @@ def T_DESTINATIONS() -> str:
     return _t("query_destinations")
 
 
+def T_USERS() -> str:
+    return _t("odoo_users")
+
+
+def T_PERMISSIONS() -> str:
+    return _t("odoo_permissions")
+
+
+def T_USER_PERMISSIONS() -> str:
+    return _t("odoo_user_permissions")
+
+
+# ---------------------------------------------------------------------------
+# Users
+# ---------------------------------------------------------------------------
+SQL_GET_USER_BY_EMAIL = lambda: f"SELECT * FROM `{_t('odoo_users')}` WHERE lower(email) = lower(@email)"
+SQL_INSERT_USER = lambda: f"""
+INSERT INTO `{_t('odoo_users')}` (id, email, password_hash, role, active, created_at, updated_at)
+VALUES (@id, @email, @password_hash, @role, @active, @created_at, @updated_at)
+"""
+SQL_UPDATE_USER_PASSWORD = lambda: f"""
+UPDATE `{_t('odoo_users')}`
+SET password_hash = @password_hash, updated_at = @updated_at
+WHERE id = @id
+"""
+SQL_COUNT_USERS = lambda: f"SELECT COUNT(*) AS n FROM `{_t('odoo_users')}`"
+SQL_GET_USER_BY_ID = lambda: f"SELECT * FROM `{_t('odoo_users')}` WHERE id = @id"
+SQL_LIST_USERS = lambda: f"SELECT * FROM `{_t('odoo_users')}` ORDER BY created_at DESC"
+SQL_UPDATE_USER = lambda: f"""
+UPDATE `{_t('odoo_users')}`
+SET role = @role, active = @active, updated_at = @updated_at
+WHERE id = @id
+"""
+
+# ---------------------------------------------------------------------------
+# Permissions
+# ---------------------------------------------------------------------------
+SQL_LIST_PERMISSIONS = lambda: f"SELECT * FROM `{_t('odoo_permissions')}` ORDER BY id"
+SQL_GET_PERMISSION_BY_ID = lambda: f"SELECT * FROM `{_t('odoo_permissions')}` WHERE id = @id"
+SQL_COUNT_PERMISSIONS = lambda: f"SELECT COUNT(*) AS n FROM `{_t('odoo_permissions')}`"
+SQL_INSERT_PERMISSION = lambda: f"""
+INSERT INTO `{_t('odoo_permissions')}` (id, label, category, created_at)
+VALUES (@id, @label, @category, @created_at)
+"""
+
+# ---------------------------------------------------------------------------
+# User permissions
+# ---------------------------------------------------------------------------
+SQL_GET_USER_PERMISSIONS = lambda: f"""
+SELECT p.id AS permission_id
+FROM `{_t('odoo_permissions')}` p
+JOIN `{_t('odoo_user_permissions')}` up ON up.permission_id = p.id
+WHERE up.user_id = @user_id
+ORDER BY p.id
+"""
+SQL_COUNT_USER_PERMISSIONS = lambda: f"SELECT COUNT(*) AS n FROM `{_t('odoo_user_permissions')}` WHERE user_id = @user_id AND permission_id = @permission_id"
+SQL_INSERT_USER_PERMISSION = lambda: f"""
+INSERT INTO `{_t('odoo_user_permissions')}` (user_id, permission_id, created_at)
+VALUES (@user_id, @permission_id, @created_at)
+"""
+SQL_DELETE_USER_PERMISSION = lambda: f"DELETE FROM `{_t('odoo_user_permissions')}` WHERE user_id = @user_id AND permission_id = @permission_id"
+
 # ---------------------------------------------------------------------------
 # Categories
 # ---------------------------------------------------------------------------

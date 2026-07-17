@@ -2,9 +2,11 @@ import re
 from datetime import date, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from google.cloud.bigquery import LoadJobConfig, SchemaField, WriteDisposition
+
+from auth import require_permission
 
 MAX_UPLOAD_ROWS = 100_000
 
@@ -25,14 +27,14 @@ def _validate_identifier(value: str, label: str) -> None:
 
 
 @router.get("/datasets")
-def list_datasets():
+def list_datasets(user: dict = Depends(require_permission("menu.consultar.programar"))):
     client = get_bigquery_client()
     datasets = list(client.list_datasets())
     return {"datasets": [{"id": d.dataset_id, "project": client.project} for d in datasets]}
 
 
 @router.get("/tables/{dataset_id}")
-def list_tables(dataset_id: str):
+def list_tables(dataset_id: str, user: dict = Depends(require_permission("menu.consultar.programar"))):
     _validate_identifier(dataset_id, "dataset")
     client = get_bigquery_client()
 
@@ -188,6 +190,7 @@ def upload_to_bigquery(
     payload: BigQueryUploadPayload,
     query_name: str | None = None,
     origin: str = "manual",
+    user: dict = Depends(require_permission("menu.consultar.programar")),
 ):
     _validate_identifier(dataset_id, "dataset")
     _validate_identifier(table_id, "table")
@@ -227,4 +230,3 @@ def upload_to_bigquery(
         table_id=table_id,
         rows_loaded=rows_loaded,
     )
-

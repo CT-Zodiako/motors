@@ -19,6 +19,9 @@ class InMemoryConfigStore:
             "query_schedules": [],
             "query_schedule_runs": [],
             "query_destinations": [],
+            "odoo_users": [],
+            "odoo_permissions": [],
+            "odoo_user_permissions": [],
         }
         self._cache = Cache(ttl_seconds=30)
         self._next_id = 1
@@ -38,6 +41,148 @@ class InMemoryConfigStore:
 
     def ensure_schema(self) -> None:
         pass  # memory tables always exist
+
+    # ------------------------------------------------------------------
+    # users
+    # ------------------------------------------------------------------
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        email_lower = email.lower()
+        for r in self._data["odoo_users"]:
+            if r.get("email", "").lower() == email_lower:
+                return codecs.decode_row("odoo_users", r)
+        return None
+
+    def list_users(self) -> list[dict]:
+        cached = self._cache.get("users")
+        if cached is not None:
+            return cached
+        rows = [codecs.decode_row("odoo_users", r) for r in self._data["odoo_users"]]
+        rows.sort(key=lambda r: r.get("created_at") or datetime.min, reverse=True)
+        self._cache.set("users", rows)
+        return rows
+
+    def get_user_by_id(self, user_id: str) -> dict | None:
+        for r in self._data["odoo_users"]:
+            if r.get("id") == user_id:
+                return codecs.decode_row("odoo_users", r)
+        return None
+
+    def create_user(self, row: dict) -> dict:
+        email = row.get("email", "").lower()
+        if any(r.get("email", "").lower() == email for r in self._data["odoo_users"]):
+            raise ConflictError(f"User with email {email} already exists")
+        clean_row = {
+            "id": row.get("id"),
+            "email": email,
+            "password_hash": row["password_hash"],
+            "role": row.get("role", "user"),
+            "active": row.get("active", True),
+            "created_at": row.get("created_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+            "updated_at": row.get("updated_at", datetime.now(timezone.utc).replace(tzinfo=None)),
+        }
+        self._data["odoo_users"].append(codecs.encode_row("odoo_users", clean_row))
+        self._cache.delete("users")
+        self._cache.delete("users_count")
+        return self.get_user_by_email(email)
+
+    def update_user_password(self, user_id: str, password_hash: str) -> dict:
+        for i, r in enumerate(self._data["odoo_users"]):
+            if r.get("id") == user_id:
+                r["password_hash"] = password_hash
+                r["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                self._cache.delete("users")
+                self._cache.delete("users_count")
+                return self.get_user_by_email(r["email"])
+        raise NotFoundError(f"User {user_id} not found")
+
+    def update_user(self, user_id: str, patch: dict) -> dict:
+        for i, r in enumerate(self._data["odoo_users"]):
+            if r.get("id") == user_id:
+                decoded = codecs.decode_row("odoo_users", r)
+                decoded["role"] = patch.get("role", decoded["role"])
+                decoded["active"] = patch.get("active", decoded["active"])
+                decoded["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                self._data["odoo_users"][i] = codecs.encode_row("odoo_users", decoded)
+                self._cache.delete("users")
+                self._cache.delete("users_count")
+                return self.get_user_by_id(user_id)
+        raise NotFoundError(f"User {user_id} not found")
+
+    def count_users(self) -> int:
+        cached = self._cache.get("users_count")
+        if cached is not None:
+            return cached
+        count = len(self._data["odoo_users"])
+        self._cache.set("users_count", count)
+        return count
+
+    # ------------------------------------------------------------------
+    # permissions
+    # ------------------------------------------------------------------
+
+    def list_permissions(self) -> list[dict]:
+        cached = self._cache.get("permissions")
+        if cached is not None:
+            return cached
+        rows = [codecs.decode_row("odoo_permissions", r) for r in self._data["odoo_permissions"]]
+        self._cache.set("permissions", rows)
+        return rows
+
+    def get_user_permissions(self, user_id: str) -> set[str]:
+        cached = self._cache.get(f"user_permissions:{user_id}")
+        if cached is not None:
+            return set(cached)
+        permissions = {
+            r["permission_id"]
+            for r in self._data["odoo_user_permissions"]
+            if r["user_id"] == user_id
+        }
+        self._cache.set(f"user_permissions:{user_id}", list(permissions))
+        return permissions
+
+    def assign_user_permission(self, user_id: str, permission_id: str) -> None:
+        if not any(r.get("id") == permission_id for r in self._data["odoo_permissions"]):
+            raise NotFoundError(f"Permission {permission_id} not found")
+        if any(
+            r.get("user_id") == user_id and r.get("permission_id") == permission_id
+            for r in self._data["odoo_user_permissions"]
+        ):
+            return
+        self._data["odoo_user_permissions"].append(
+            codecs.encode_row(
+                "odoo_user_permissions",
+                {
+                    "user_id": user_id,
+                    "permission_id": permission_id,
+                    "created_at": datetime.now(timezone.utc).replace(tzinfo=None),
+                },
+            )
+        )
+        self._cache.delete(f"user_permissions:{user_id}")
+
+    def revoke_user_permission(self, user_id: str, permission_id: str) -> None:
+        self._data["odoo_user_permissions"] = [
+            r
+            for r in self._data["odoo_user_permissions"]
+            if not (r.get("user_id") == user_id and r.get("permission_id") == permission_id)
+        ]
+        self._cache.delete(f"user_permissions:{user_id}")
+
+    def seed_permission_defaults(self) -> None:
+        if self._data["odoo_permissions"]:
+            return
+        from .bootstrap import _SEED_PERMISSIONS
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for perm in _SEED_PERMISSIONS:
+            row = {
+                "id": perm["id"],
+                "label": perm["label"],
+                "category": perm.get("category"),
+                "created_at": now,
+            }
+            self._data["odoo_permissions"].append(codecs.encode_row("odoo_permissions", row))
+        self._cache.delete("permissions")
 
     def seed_defaults(self) -> None:
         # General category if empty
