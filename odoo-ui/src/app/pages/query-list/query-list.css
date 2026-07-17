@@ -131,3 +131,72 @@ code {
     width: 100%;
   }
 }
+
+
+/* Delete confirmation dialog */
+.delete-confirm-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.delete-confirm-warning {
+  display: flex;
+  gap: 0.875rem;
+  padding: 1rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  align-items: flex-start;
+}
+
+.warning-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.warning-title {
+  margin: 0;
+  font-weight: 600;
+  color: #92400e;
+  font-size: 0.95rem;
+}
+
+.warning-subtitle {
+  margin: 0;
+  color: #a16207;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.delete-confirm-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #4b5563;
+  font-size: 0.85rem;
+}
+
+.delete-confirm-note i {
+  font-size: 1rem;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+  gap: 0.5rem;
+}

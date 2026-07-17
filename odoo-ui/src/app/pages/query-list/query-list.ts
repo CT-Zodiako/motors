@@ -12,11 +12,12 @@ import { SkeletonModule } from 'primeng/skeleton';
 import { SelectModule } from 'primeng/select';
 import { ToggleSwitchModule } from 'primeng/toggleswitch';
 import { TooltipModule } from 'primeng/tooltip';
+import { DialogModule } from 'primeng/dialog';
 import { MessageService } from 'primeng/api';
 
 @Component({
   selector: 'app-query-list',
-  imports: [FormsModule, TableModule, ButtonModule, TagModule, SkeletonModule, SelectModule, ToggleSwitchModule, TooltipModule],
+  imports: [FormsModule, TableModule, ButtonModule, TagModule, SkeletonModule, SelectModule, ToggleSwitchModule, TooltipModule, DialogModule],
   templateUrl: './query-list.html',
   styleUrl: './query-list.css',
 })
@@ -32,6 +33,10 @@ export class QueryList implements OnInit {
   categories = signal<QueryCategory[]>([]);
   loading = signal(true);
   selectedCategoryFilter = signal<number | null>(null);
+
+  // Delete confirmation dialog state
+  showDeleteConfirm = signal(false);
+  queryToDelete = signal<OdooQuery | null>(null);
 
   // query-categories change: rows grouped by category (alphabetical), then by name
   sortedQueries = computed(() => sortByCategoryThenName(this.queries()));
@@ -86,15 +91,31 @@ export class QueryList implements OnInit {
   }
 
   deleteQuery(q: OdooQuery) {
+    this.queryToDelete.set(q);
+    this.showDeleteConfirm.set(true);
+  }
+
+  confirmDelete() {
+    const q = this.queryToDelete();
+    if (!q) return;
     this.svc.delete(q.name).subscribe({
       next: () => {
         this.queries.update((rows) => rows.filter((r) => r.name !== q.name));
         this.msg.add({ severity: 'success', summary: 'Listo', detail: `Query "${q.name}" eliminado` });
+        this.showDeleteConfirm.set(false);
+        this.queryToDelete.set(null);
       },
       error: () => {
         this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar el query' });
+        this.showDeleteConfirm.set(false);
+        this.queryToDelete.set(null);
       },
     });
+  }
+
+  cancelDelete() {
+    this.showDeleteConfirm.set(false);
+    this.queryToDelete.set(null);
   }
 
   editQuery(q: OdooQuery) {

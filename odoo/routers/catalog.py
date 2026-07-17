@@ -150,11 +150,8 @@ def update_query(name: str, body: QueryPatchIn, user: dict = Depends(require_per
     if patch:
         get_store().patch_query(name, patch)
 
-    # Propagation (synchronous, best-effort) — still reads PG destinations via query_registry
-    from query_propagation import propagate_query_edit
     updated = get_query(name)
-    propagation = propagate_query_edit(updated)
-    return {"query": updated, "propagation": propagation}
+    return {"query": updated}
 
 
 @router.delete("/{name}")

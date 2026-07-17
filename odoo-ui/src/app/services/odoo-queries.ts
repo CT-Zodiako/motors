@@ -88,8 +88,8 @@ export class OdooQueriesService {
     return this.http.patch<OdooQuery>(`${this.base}/queries/${name}`, { category_id: categoryId });
   }
 
-  update(name: string, payload: Partial<CreateQueryPayload>): Observable<{ query: OdooQuery; propagation: { total: number; ok: number; failed: number; destinations: { dataset_id: string; table_id: string; status: string; error?: string }[] } }> {
-    return this.http.patch<{ query: OdooQuery; propagation: any }>(`${this.base}/queries/${encodeURIComponent(name)}`, payload);
+  update(name: string, payload: Partial<CreateQueryPayload>): Observable<{ query: OdooQuery; propagation?: { total: number; ok: number; failed: number; destinations: { dataset_id: string; table_id: string; status: string; error?: string }[] } }> {
+    return this.http.patch<{ query: OdooQuery; propagation?: any }>(`${this.base}/queries/${encodeURIComponent(name)}`, payload);
   }
 
   run(name: string): Observable<QueryResult> {

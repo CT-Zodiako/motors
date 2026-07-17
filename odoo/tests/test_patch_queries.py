@@ -36,13 +36,8 @@ def sample_query():
 
 # ── RED: module doesn't exist yet (QueryPatchIn, propagation import) ──
 
-def test_patch_full_edit_success(sample_query, monkeypatch):
-    """PATCH updates fields, domain, limit_val, description, category_id and returns propagation report."""
-    # Stub propagation so we don't need Odoo/BQ
-    monkeypatch.setattr(
-        "query_propagation.propagate_query_edit",
-        lambda q: {"total": 0, "ok": 0, "failed": 0, "destinations": []},
-    )
+def test_patch_full_edit_success(sample_query):
+    """PATCH updates fields, domain, limit_val, description, category_id."""
     payload = {
         "fields": ["name", "email"],
         "domain": [["active", "=", True]],
@@ -58,7 +53,7 @@ def test_patch_full_edit_success(sample_query, monkeypatch):
     assert data["query"]["domain"] == [["active", "=", True]]
     assert data["query"]["limit_val"] == 100
     assert data["query"]["description"] == "updated"
-    assert "propagation" in data
+    assert "propagation" not in data
 
 
 def test_patch_category_only_backwards_compat(sample_query):
@@ -105,32 +100,18 @@ def test_patch_invalid_domain_400(sample_query):
     assert r.status_code in (400, 422)
 
 
-def test_patch_propagation_in_response(sample_query, monkeypatch):
-    """Propagation report shape must match design D7 contract."""
-    fake_report = {
-        "total": 2,
-        "ok": 1,
-        "failed": 1,
-        "destinations": [
-            {"dataset_id": "ds1", "table_id": "t1", "status": "ok"},
-            {"dataset_id": "ds2", "table_id": "t2", "status": "failed", "error": "boom"},
-        ],
-    }
-    monkeypatch.setattr("query_propagation.propagate_query_edit", lambda q: fake_report)
+def test_patch_no_propagation_in_response(sample_query):
+    """PATCH no longer triggers or returns propagation report."""
     r = client.patch(f"/queries/{sample_query}", json={"description": "x"})
     assert r.status_code == 200
-    assert r.json()["propagation"] == fake_report
+    assert "propagation" not in r.json()
 
 
-def test_patch_zero_destinations_propagation(sample_query, monkeypatch):
-    """No destinations → propagation total 0, edit still saved."""
-    monkeypatch.setattr(
-        "query_propagation.propagate_query_edit",
-        lambda q: {"total": 0, "ok": 0, "failed": 0, "destinations": []},
-    )
+def test_patch_edit_without_destinations(sample_query):
+    """PATCH with no destinations still saves and does not propagate."""
     r = client.patch(f"/queries/{sample_query}", json={"description": "no-dest"})
     assert r.status_code == 200
-    assert r.json()["propagation"]["total"] == 0
+    assert "propagation" not in r.json()
     assert r.json()["query"]["description"] == "no-dest"
 
 def test_patch_same_name_value_ok(sample_query):

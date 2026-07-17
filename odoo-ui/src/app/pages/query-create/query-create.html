@@ -394,20 +394,40 @@
   <p-dialog
     [visible]="showDestructiveConfirm()"
     (visibleChange)="showDestructiveConfirm.set($event)"
-    header="Confirmar eliminación de campos"
+    header="Confirmar cambios destructivos"
     [modal]="true"
-    [style]="{ width: '450px' }"
+    [style]="{ width: '480px' }"
+    [closable]="false"
   >
-    <p>Los siguientes campos serán eliminados de la consulta y sus datos históricos serán borrados de BigQuery:</p>
-    <ul>
-      @for (field of removedFields(); track field) {
-        <li>{{ field }}</li>
-      }
-    </ul>
-    <p>Esta acción no se puede deshacer.</p>
+    <div class="destructive-summary">
+      <div class="destructive-warning">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-text">
+          <p class="warning-title">Estás por eliminar campos del query</p>
+          <p class="warning-subtitle">
+            Al guardar, estos campos se quitarán de la consulta y sus columnas se borrarán de las tablas de BigQuery asociadas.
+          </p>
+        </div>
+      </div>
+
+      <div class="destructive-section">
+        <p class="destructive-section-title">Campos que se eliminarán</p>
+        <div class="removed-fields-list">
+          @for (field of removedFields(); track field) {
+            <span class="removed-field-badge">{{ field }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="destructive-note">
+        <i class="pi pi-lock"></i>
+        <span>Esta acción no se puede deshacer. Los datos históricos de esas columnas en BigQuery se perderán.</span>
+      </div>
+    </div>
+
     <div class="dialog-actions">
       <p-button label="Cancelar" [text]="true" (onClick)="showDestructiveConfirm.set(false)" />
-      <p-button label="Confirmar y guardar" severity="danger" (onClick)="confirmDestructiveSave()" />
+      <p-button label="Confirmar y guardar" icon="pi pi-trash" severity="danger" (onClick)="confirmDestructiveSave()" />
     </div>
   </p-dialog>
 }

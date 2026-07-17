@@ -1,35 +1,77 @@
-<div class="admin-container">
-  <div class="admin-header">
-    <h2 class="admin-title">Administración de usuarios</h2>
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>Administración de usuarios</h1>
+      <p class="subtitle">Gestioná los usuarios y sus permisos de acceso.</p>
+    </div>
     <p-button label="Nuevo usuario" icon="pi pi-plus" (onClick)="openCreate()" />
   </div>
 
-  <p-table [value]="users()" [loading]="loading()" [paginator]="true" [rows]="10"
-    styleClass="p-datatable-sm">
-    <ng-template pTemplate="header">
-      <tr>
-        <th>Email</th>
-        <th>Rol</th>
-        <th>Activo</th>
-        <th>Acciones</th>
-      </tr>
-    </ng-template>
-    <ng-template pTemplate="body" let-user>
-      <tr>
-        <td>{{ user.email }}</td>
-        <td>
-          <p-tag [value]="user.role" [severity]="user.role === 'admin' ? 'danger' : 'info'" />
-        </td>
-        <td>
-          <p-tag [value]="user.active ? 'Sí' : 'No'" [severity]="user.active ? 'success' : 'warn'" />
-        </td>
-        <td>
-          <p-button icon="pi pi-pencil" severity="secondary" [text]="true" (onClick)="openEdit(user)" pTooltip="Editar" />
-          <p-button icon="pi pi-trash" severity="danger" [text]="true" (onClick)="openDeleteDialog(user)" pTooltip="Eliminar" />
-        </td>
-      </tr>
-    </ng-template>
-  </p-table>
+  <div class="page-card">
+    <p-table
+      [value]="users()"
+      [loading]="loading()"
+      [paginator]="true"
+      [rows]="10"
+      [rowsPerPageOptions]="[10, 25, 50]"
+      [globalFilterFields]="['email', 'role']"
+      styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+      #dt
+    >
+      <ng-template #caption>
+        <div class="table-toolbar">
+          <div class="search-field">
+            <label for="user-search">Buscar</label>
+            <span class="p-input-icon-left">
+              <i class="pi pi-search"></i>
+              <input
+                id="user-search"
+                pInputText
+                type="text"
+                class="search-input"
+                placeholder="Email o rol..."
+                (input)="dt.filterGlobal(($any($event.target)).value, 'contains')"
+              />
+            </span>
+          </div>
+          <p-tag [value]="users().length + ' usuarios'" severity="secondary" />
+        </div>
+      </ng-template>
+
+      <ng-template #header>
+        <tr>
+          <th pSortableColumn="email">Email <p-sortIcon field="email" /></th>
+          <th>Rol</th>
+          <th>Activo</th>
+          <th class="col-options">Acciones</th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-user>
+        <tr>
+          <td>{{ user.email }}</td>
+          <td>
+            <p-tag [value]="user.role" [severity]="user.role === 'admin' ? 'danger' : 'info'" />
+          </td>
+          <td>
+            <p-tag [value]="user.active ? 'Sí' : 'No'" [severity]="user.active ? 'success' : 'warn'" />
+          </td>
+          <td class="col-options">
+            <div class="row-actions">
+              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" (onClick)="openEdit(user)" pTooltip="Editar" />
+              <p-button icon="pi pi-trash" severity="danger" [text]="true" (onClick)="openDeleteDialog(user)" pTooltip="Eliminar" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="4" class="empty-msg">No hay usuarios registrados.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
 
   <!-- Single create/edit dialog -->
   <p-dialog [visible]="dialogVisible()" (onHide)="dialogVisible.set(false)" [header]="dialogTitle()" [modal]="true" [style]="{ width: '900px' }">
