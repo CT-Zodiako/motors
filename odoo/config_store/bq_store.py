@@ -545,6 +545,16 @@ class BigQueryConfigStore:
         self._cache.set("users_count", count)
         return count
 
+    def delete_user(self, user_id: str) -> None:
+        if self.get_user_by_id(user_id) is None:
+            raise NotFoundError(f"User {user_id} not found")
+        # Cascade: remove all user permissions first to avoid orphan rows
+        self._query(sql.SQL_DELETE_USER_PERMISSIONS(), [_string_param("user_id", user_id)])
+        self._query(sql.SQL_DELETE_USER(), [_string_param("id", user_id)])
+        self._cache.delete("users")
+        self._cache.delete("users_count")
+        self._cache.delete(f"user_permissions:{user_id}")
+
     # ------------------------------------------------------------------
     # permissions
     # ------------------------------------------------------------------

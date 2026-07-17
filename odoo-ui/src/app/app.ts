@@ -7,13 +7,15 @@ import { FileUpload } from './pages/file-upload/file-upload';
 import { UserAdminComponent } from './pages/user-admin/user-admin';
 import { LoginComponent } from './pages/login/login';
 import { ChangePasswordComponent } from './pages/change-password/change-password';
+import { WelcomeComponent } from './pages/welcome/welcome';
 import { ToastModule } from 'primeng/toast';
 import { ButtonModule } from 'primeng/button';
-import { AvatarModule } from 'primeng/avatar';
+import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { AuthService } from './services/auth';
+import { APP_VERSION } from './version';
 
-type Tab = 'list' | 'create' | 'runner' | 'schedules' | 'upload' | 'admin' | 'change-password';
+type Tab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload' | 'admin' | 'change-password';
 
 interface MenuNode {
   id?: Tab;
@@ -25,7 +27,7 @@ interface MenuNode {
 
 @Component({
   selector: 'app-root',
-  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, ToastModule, ButtonModule, AvatarModule],
+  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, WelcomeComponent, ToastModule, ButtonModule, TooltipModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -33,10 +35,11 @@ export class App implements OnInit {
   private auth = inject(AuthService);
   private msg = inject(MessageService);
 
-  activeTab = signal<Tab>('list');
+  activeTab = signal<Tab>('home');
   authenticated = this.auth.isAuthenticated;
   user = this.auth.user;
-  loadingAuth = signal(true);
+  sidebarCollapsed = signal(false);
+  appVersion = APP_VERSION;
 
   // Hierarchical menu definition. Supports 2 levels today and 3+ levels tomorrow
   // via the recursive filterMenu / render helpers.
@@ -76,7 +79,7 @@ export class App implements OnInit {
   ngOnInit() {
     this.auth.fetchMe().subscribe({
       error: () => {},
-      complete: () => this.loadingAuth.set(false),
+      complete: () => {},
     });
   }
 
@@ -112,10 +115,15 @@ export class App implements OnInit {
     this.activeTab.set('change-password');
   }
 
+  toggleSidebar() {
+    this.sidebarCollapsed.update((v) => !v);
+  }
+
   logout() {
     this.auth.logout().subscribe({
       next: () => {
-        this.activeTab.set('list');
+        this.activeTab.set('home');
+        this.sidebarCollapsed.set(false);
         this.msg.add({ severity: 'success', summary: 'Listo', detail: 'Sesión cerrada' });
       },
       error: () => {
@@ -124,3 +132,4 @@ export class App implements OnInit {
     });
   }
 }
+

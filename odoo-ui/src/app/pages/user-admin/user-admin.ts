@@ -1,7 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TitleCasePipe } from '@angular/common';
-import { finalize, forkJoin } from 'rxjs';
+import { finalize, forkJoin, Observable } from 'rxjs';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { Dialog } from 'primeng/dialog';
@@ -53,6 +53,9 @@ export class UserAdminComponent implements OnInit {
   selectedUser = signal<UserFormModel | null>(null);
   selectedPermissions = signal<Record<string, boolean>>({});
   dialogTitle = computed(() => (this.isEditing() ? 'Editar usuario' : 'Nuevo usuario'));
+
+  deleteDialogVisible = signal(false);
+  userToDelete = signal<UserAdmin | null>(null);
 
   roleOptions = [
     { label: 'Admin', value: 'admin' },
@@ -141,18 +144,20 @@ export class UserAdminComponent implements OnInit {
     this.saving.set(true);
     if (this.isEditing() && model.id) {
       const payload: UpdateUserPayload = { role: model.role, active: model.active };
-      this.admin
-        .updateUser(model.id, payload)
-        .pipe(finalize(() => this.saving.set(false)))
-        .subscribe({
-          next: () => {
-            this.savePermissions(model.id!);
-          },
-          error: () => {
-            this.saving.set(false);
-            this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el usuario' });
-          },
-        });
+      const edits: Observable<any>[] = [this.admin.updateUser(model.id, payload)];
+      if (model.password) {
+        edits.push(this.admin.resetPassword(model.id, model.password));
+      }
+      forkJoin(edits).subscribe({
+        next: () => {
+          const successMessage = model.password ? 'Usuario, contraseña y permisos actualizados' : 'Usuario y permisos actualizados';
+          this.savePermissions(model.id!, successMessage);
+        },
+        error: () => {
+          this.saving.set(false);
+          this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el usuario' });
+        },
+      });
     } else {
       const payload: CreateUserPayload = {
         email: model.email,
@@ -162,14 +167,12 @@ export class UserAdminComponent implements OnInit {
       };
       this.admin
         .createUser(payload)
-        .pipe(finalize(() => this.saving.set(false)))
         .subscribe({
           next: (created) => {
-            this.dialogVisible.set(false);
-            this.loadUsers();
-            this.msg.add({ severity: 'success', summary: 'Listo', detail: `Usuario ${created.email} creado` });
+            this.savePermissionsAfterCreate(created.id);
           },
           error: (err) => {
+            this.saving.set(false);
             const detail = err.status === 409 ? 'El email ya existe' : 'No se pudo crear el usuario';
             this.msg.add({ severity: 'error', summary: 'Error', detail });
           },
@@ -177,7 +180,7 @@ export class UserAdminComponent implements OnInit {
     }
   }
 
-  private savePermissions(userId: string) {
+  private savePermissionsAfterCreate(userId: string) {
     const requests = this.permissions()
       .filter((perm) => this.selectedPermissions()[perm.id] !== undefined)
       .map((perm) =>
@@ -188,23 +191,70 @@ export class UserAdminComponent implements OnInit {
       );
 
     if (requests.length === 0) {
-      this.dialogVisible.set(false);
-      this.loadUsers();
-      this.msg.add({ severity: 'success', summary: 'Listo', detail: 'Usuario actualizado' });
+      this.finishSave('Usuario creado');
       return;
     }
 
     forkJoin(requests).subscribe({
+      next: () => this.finishSave('Usuario y permisos creados'),
+      error: () => this.finishSave('Usuario creado, pero algunos permisos fallaron', 'warn'),
+    });
+  }
+
+  private savePermissions(userId: string, successMessage = 'Usuario y permisos actualizados') {
+    const requests = this.permissions()
+      .filter((perm) => this.selectedPermissions()[perm.id] !== undefined)
+      .map((perm) =>
+        this.admin.setPermission(userId, {
+          permission_id: perm.id,
+          granted: !!this.selectedPermissions()[perm.id],
+        })
+      );
+
+    if (requests.length === 0) {
+      this.finishSave(successMessage);
+      return;
+    }
+
+    forkJoin(requests).subscribe({
+      next: () => this.finishSave(successMessage),
+      error: () => this.finishSave('Usuario actualizado, pero algunos permisos fallaron', 'warn'),
+    });
+  }
+
+  private finishSave(detail: string, severity: 'success' | 'warn' = 'success') {
+    this.saving.set(false);
+    this.dialogVisible.set(false);
+    this.loadUsers();
+    this.msg.add({ severity, summary: severity === 'success' ? 'Listo' : 'Atención', detail });
+  }
+
+  openDeleteDialog(user: UserAdmin) {
+    this.userToDelete.set(user);
+    this.deleteDialogVisible.set(true);
+  }
+
+  cancelDelete() {
+    this.userToDelete.set(null);
+    this.deleteDialogVisible.set(false);
+  }
+
+  confirmDelete() {
+    const user = this.userToDelete();
+    if (!user) return;
+    this.admin.deleteUser(user.id).subscribe({
       next: () => {
-        this.dialogVisible.set(false);
+        this.userToDelete.set(null);
+        this.deleteDialogVisible.set(false);
         this.loadUsers();
-        this.msg.add({ severity: 'success', summary: 'Listo', detail: 'Usuario y permisos actualizados' });
+        this.msg.add({ severity: 'success', summary: 'Listo', detail: 'Usuario eliminado' });
       },
       error: () => {
-        this.dialogVisible.set(false);
-        this.loadUsers();
-        this.msg.add({ severity: 'warn', summary: 'Atención', detail: 'Usuario actualizado, pero algunos permisos fallaron' });
+        this.userToDelete.set(null);
+        this.deleteDialogVisible.set(false);
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar el usuario' });
       },
     });
   }
 }
+

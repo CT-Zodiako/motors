@@ -3,69 +3,125 @@
 @if (!authenticated()) {
   <app-login />
 } @else {
-  <div class="layout">
+  <div class="layout" [class.sidebar-collapsed]="sidebarCollapsed()">
     <aside class="sidebar">
       <div class="sidebar-brand">
         <div class="sidebar-logo">
           <i class="pi pi-link"></i>
-          Odoo Bridge
+          @if (!sidebarCollapsed()) {
+            <span>Odoo Bridge</span>
+          }
         </div>
-        <p class="sidebar-tagline">Conectá Odoo con BigQuery de forma segura</p>
+        @if (!sidebarCollapsed()) {
+          <p class="sidebar-tagline">Conectá Odoo con BigQuery</p>
+        }
+      </div>
+
+      <div class="sidebar-user">
+        @if (user(); as u) {
+          <div class="sidebar-user-email">
+            <i class="pi pi-user"></i>
+            @if (!sidebarCollapsed()) {
+              <span>{{ u.email }}</span>
+            }
+          </div>
+        }
       </div>
 
       <nav class="sidebar-nav">
-        @if (visibleMenu().length === 0) {
-          <div class="nav-empty">
-            <i class="pi pi-lock"></i>
-            <span>No tenés menús habilitados</span>
-          </div>
+        @if (!sidebarCollapsed()) {
+          @if (visibleMenu().length === 0) {
+            <div class="nav-empty">
+              <i class="pi pi-lock"></i>
+              <span>No tenés menús habilitados</span>
+            </div>
+          }
         }
 
+        <button
+          class="nav-item"
+          [class.active]="activeTab() === 'home'"
+          (click)="setTab('home')"
+          [pTooltip]="sidebarCollapsed() ? 'Inicio' : ''"
+          tooltipPosition="right"
+        >
+          <i class="pi pi-home"></i>
+          @if (!sidebarCollapsed()) {
+            <span>Inicio</span>
+          }
+        </button>
+
         @for (group of visibleMenu(); track group.label) {
-          <div class="nav-group">
-            <span class="nav-group-label">{{ group.label }}</span>
-            @for (item of group.children; track item.id) {
-              <button
-                class="nav-item"
-                [class.active]="activeTab() === item.id"
-                (click)="setTab(item.id!)"
-              >
-                <i class="pi {{ item.icon }}"></i>
-                {{ item.label }}
-              </button>
+          @if (!sidebarCollapsed()) {
+            @if (group.children && group.children.length > 0) {
+              <div class="nav-group">
+                <span class="nav-group-label">{{ group.label }}</span>
+                @for (item of group.children; track item.id) {
+                  <button
+                    class="nav-item"
+                    [class.active]="activeTab() === item.id"
+                    (click)="setTab(item.id!)"
+                  >
+                    <i class="pi {{ item.icon }}"></i>
+                    {{ item.label }}
+                  </button>
+                }
+              </div>
             }
-          </div>
+          } @else {
+            @if (group.children && group.children.length > 0) {
+              @for (item of group.children; track item.id) {
+                <button
+                  class="nav-item"
+                  [class.active]="activeTab() === item.id"
+                  (click)="setTab(item.id!)"
+                  [pTooltip]="item.label"
+                  tooltipPosition="right"
+                >
+                  <i class="pi {{ item.icon }}"></i>
+                </button>
+              }
+            }
+          }
         }
       </nav>
 
       <div class="sidebar-footer">
-        @if (user(); as u) {
-          <div class="user-info">
-            <p-avatar icon="pi pi-user" shape="circle" />
-            <div class="user-meta">
-              <span class="user-email">{{ u.email }}</span>
-              <span class="user-role">{{ u.role }}</span>
-            </div>
-          </div>
-        }
         @for (item of visibleAccountMenu(); track item.id) {
           <button
             class="nav-item"
             [class.active]="activeTab() === item.id"
             (click)="changePassword()"
+            [pTooltip]="sidebarCollapsed() ? item.label : ''"
+            tooltipPosition="right"
           >
             <i class="pi {{ item.icon }}"></i>
-            {{ item.label }}
+            @if (!sidebarCollapsed()) {
+              <span>{{ item.label }}</span>
+            }
           </button>
         }
-        <button class="nav-item" (click)="logout()">
+        <button class="nav-item" (click)="logout()" [pTooltip]="sidebarCollapsed() ? 'Cerrar sesión' : ''" tooltipPosition="right">
           <i class="pi pi-sign-out"></i>
-          Cerrar sesión
+          @if (!sidebarCollapsed()) {
+            <span>Cerrar sesión</span>
+          }
         </button>
+
+        @if (!sidebarCollapsed()) {
+          <div class="version-info">
+            V {{ appVersion }}
+          </div>
+        }
       </div>
+
+      <button class="sidebar-toggle" (click)="toggleSidebar()" [pTooltip]="sidebarCollapsed() ? 'Expandir menú' : 'Colapsar menú'" tooltipPosition="right">
+        <i class="pi" [class.pi-angle-left]="!sidebarCollapsed()" [class.pi-angle-right]="sidebarCollapsed()"></i>
+      </button>
     </aside>
 
     <main class="content">
+      @if (activeTab() === 'home')     { <app-welcome /> }
       @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
       @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
       @if (activeTab() === 'runner')   { <app-query-runner /> }
@@ -77,3 +133,5 @@
     </main>
   </div>
 }
+
+

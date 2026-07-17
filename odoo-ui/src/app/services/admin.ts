@@ -66,6 +66,12 @@ export class AdminService {
     });
   }
 
+  deleteUser(userId: string): Observable<{ deleted: string }> {
+    return this.http.delete<{ deleted: string }>(`${this.base}/admin/users/${userId}`, {
+      withCredentials: true,
+    });
+  }
+
   resetPassword(userId: string, password: string): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(`${this.base}/admin/users/${userId}/reset-password`, {
       password,

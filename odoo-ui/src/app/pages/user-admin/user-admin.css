@@ -134,3 +134,9 @@
   color: #6b7280;
   font-size: 0.8rem;
 }
+
+.warning-text {
+  color: #dc2626;
+  font-size: 0.9rem;
+  margin-top: 0.5rem;
+}

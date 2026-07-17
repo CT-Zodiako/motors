@@ -25,13 +25,14 @@
         </td>
         <td>
           <p-button icon="pi pi-pencil" severity="secondary" [text]="true" (onClick)="openEdit(user)" pTooltip="Editar" />
+          <p-button icon="pi pi-trash" severity="danger" [text]="true" (onClick)="openDeleteDialog(user)" pTooltip="Eliminar" />
         </td>
       </tr>
     </ng-template>
   </p-table>
 
   <!-- Single create/edit dialog -->
-  <p-dialog [(visible)]="dialogVisible" [header]="dialogTitle()" [modal]="true" [style]="{ width: '900px' }">
+  <p-dialog [visible]="dialogVisible()" (onHide)="dialogVisible.set(false)" [header]="dialogTitle()" [modal]="true" [style]="{ width: '900px' }">
     @if (selectedUser(); as u) {
       <form (ngSubmit)="saveUser()">
         <div class="dialog-layout">
@@ -44,12 +45,13 @@
               <input id="email" type="email" pInputText [(ngModel)]="u.email" name="email" required [disabled]="isEditing()" />
             </div>
 
-            @if (!isEditing()) {
-              <div class="form-field">
-                <label for="password">Contraseña</label>
-                <input id="password" type="password" pInputText [(ngModel)]="u.password" name="password" required />
-              </div>
-            }
+            <div class="form-field">
+              <label for="password">{{ isEditing() ? 'Nueva contraseña (opcional)' : 'Contraseña' }}</label>
+              <input id="password" type="password" pInputText [(ngModel)]="u.password" name="password" [required]="!isEditing()" />
+              @if (isEditing()) {
+                <small class="hint">Dejá vacío para no cambiar la contraseña actual.</small>
+              }
+            </div>
 
             <div class="form-field">
               <label for="role">Rol</label>
@@ -70,42 +72,55 @@
             </div>
           </div>
 
-          <!-- Permissions (only when editing) -->
-          @if (isEditing()) {
-            <div class="dialog-section permissions-section">
-              <h4 class="section-title">Permisos de menú</h4>
+          <!-- Permissions -->
+          <div class="dialog-section permissions-section">
+            <h4 class="section-title">Permisos de menú</h4>
 
-              @if (permissionGroups(); as groups) {
-                <div class="permissions-scroll">
-                  @for (group of groups; track group.category) {
-                    <div class="permission-group">
-                      <h5 class="permission-group-title">{{ group.category | titlecase }}</h5>
-                      <div class="permissions-grid">
-                        @for (perm of group.permissions; track perm.id) {
-                          <div class="permission-item">
-                            <p-checkbox
-                              [ngModel]="selectedPermissions()[perm.id]"
-                              (ngModelChange)="togglePermission(perm.id, $event)"
-                              [name]="'perm-' + perm.id"
-                              [binary]="true"
-                            />
-                            <label [for]="'perm-' + perm.id">{{ perm.label }}</label>
-                          </div>
-                        }
-                      </div>
+            @if (permissionGroups(); as groups) {
+              <div class="permissions-scroll">
+                @for (group of groups; track group.category) {
+                  <div class="permission-group">
+                    <h5 class="permission-group-title">{{ group.category | titlecase }}</h5>
+                    <div class="permissions-grid">
+                      @for (perm of group.permissions; track perm.id) {
+                        <div class="permission-item">
+                          <p-checkbox
+                            [ngModel]="selectedPermissions()[perm.id]"
+                            (ngModelChange)="togglePermission(perm.id, $event)"
+                            [name]="'perm-' + perm.id"
+                            [binary]="true"
+                          />
+                          <label [for]="'perm-' + perm.id">{{ perm.label }}</label>
+                        </div>
+                      }
                     </div>
-                  }
-                </div>
-              }
-            </div>
-          }
+                  </div>
+                }
+              </div>
+            }
+          </div>
         </div>
 
         <div class="dialog-actions">
           <p-button label="Cancelar" severity="secondary" (onClick)="dialogVisible.set(false)" />
-          <p-button type="submit" label="Guardar" icon="pi pi-check" />
+          <p-button type="submit" label="Guardar" icon="pi pi-check" [loading]="saving()" />
         </div>
       </form>
     }
   </p-dialog>
+
+  <!-- Delete confirmation dialog -->
+  <p-dialog [visible]="deleteDialogVisible()" (onHide)="cancelDelete()" header="Confirmar eliminación" [modal]="true" [style]="{ width: '400px' }">
+    @if (userToDelete(); as user) {
+      <p>
+        ¿Seguro que querés eliminar el usuario <strong>{{ user.email }}</strong>?
+      </p>
+      <p class="warning-text">Esta acción no se puede deshacer.</p>
+    }
+    <div class="dialog-actions">
+      <p-button label="Cancelar" severity="secondary" (onClick)="cancelDelete()" />
+      <p-button label="Eliminar" icon="pi pi-trash" severity="danger" (onClick)="confirmDelete()" />
+    </div>
+  </p-dialog>
 </div>
+
