@@ -69,6 +69,31 @@ class TestAdminUsers:
         assert body["role"] == "admin"
         assert body["active"] is False
 
+    def test_delete_user(self, admin_client, store):
+        user = store.create_user({
+            "id": "delete-user",
+            "email": "delete@example.com",
+            "password_hash": "hash",
+            "role": "user",
+            "active": True,
+            "created_at": None,
+            "updated_at": None,
+        })
+        store.assign_user_permission(user["id"], "menu.consultar.queries")
+        assert store.get_user_by_id(user["id"]) is not None
+        assert "menu.consultar.queries" in store.get_user_permissions(user["id"])
+
+        res = admin_client.delete(f"/admin/users/{user['id']}")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["deleted"] == user["id"]
+        assert store.get_user_by_id(user["id"]) is None
+        assert store.get_user_permissions(user["id"]) == set()
+
+    def test_delete_user_not_found(self, admin_client, store):
+        res = admin_client.delete("/admin/users/nonexistent-user-id")
+        assert res.status_code == 404
+
     def test_set_permission(self, admin_client, store):
         user = store.create_user({
             "id": "perms-user",
@@ -110,3 +135,4 @@ class TestAdminUsers:
         res = client.get("/admin/users")
         assert res.status_code == 403
         app.dependency_overrides[get_current_user] = lambda: store.get_user_by_email("test@example.com")
+

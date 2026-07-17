@@ -89,6 +89,14 @@ def update_user(user_id: str, body: UserUpdateIn, user: dict = Depends(require_p
     return {"id": updated["id"], "email": updated["email"], "role": updated["role"], "active": updated["active"]}
 
 
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str, user: dict = Depends(require_permission("menu.admin.usuarios"))):
+    if get_store().get_user_by_id(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    get_store().delete_user(user_id)
+    return {"deleted": user_id}
+
+
 @router.post("/users/{user_id}/reset-password")
 def reset_password(user_id: str, body: dict, user: dict = Depends(require_permission("menu.admin.usuarios"))):
     new_password = body.get("password")
@@ -118,3 +126,4 @@ def set_permission(user_id: str, body: PermissionAssignmentIn, user: dict = Depe
 @router.get("/permissions")
 def list_permissions(user: dict = Depends(require_permission("menu.admin.usuarios"))):
     return {"permissions": get_store().list_permissions()}
+

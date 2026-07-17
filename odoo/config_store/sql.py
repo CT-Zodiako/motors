@@ -83,6 +83,8 @@ UPDATE `{_t('odoo_users')}`
 SET role = @role, active = @active, updated_at = @updated_at
 WHERE id = @id
 """
+SQL_DELETE_USER = lambda: f"DELETE FROM `{_t('odoo_users')}` WHERE id = @id"
+SQL_DELETE_USER_PERMISSIONS = lambda: f"DELETE FROM `{_t('odoo_user_permissions')}` WHERE user_id = @user_id"
 
 # ---------------------------------------------------------------------------
 # Permissions
@@ -226,4 +228,5 @@ SET stale = @stale, last_error = @last_error, last_sync_at = @last_sync_at, last
 WHERE id = @id
 """
 SQL_DELETE_DESTINATIONS_BY_QUERY = lambda: f"DELETE FROM `{_t('query_destinations')}` WHERE query_name = @query_name"
+
 

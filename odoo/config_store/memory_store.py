@@ -109,6 +109,21 @@ class InMemoryConfigStore:
                 return self.get_user_by_id(user_id)
         raise NotFoundError(f"User {user_id} not found")
 
+    def delete_user(self, user_id: str) -> None:
+        user = self.get_user_by_id(user_id)
+        if user is None:
+            raise NotFoundError(f"User {user_id} not found")
+        # Cascade: remove all user permissions
+        self._data["odoo_user_permissions"] = [
+            r
+            for r in self._data["odoo_user_permissions"]
+            if r.get("user_id") != user_id
+        ]
+        self._data["odoo_users"] = [r for r in self._data["odoo_users"] if r.get("id") != user_id]
+        self._cache.delete("users")
+        self._cache.delete("users_count")
+        self._cache.delete(f"user_permissions:{user_id}")
+
     def count_users(self) -> int:
         cached = self._cache.get("users_count")
         if cached is not None:
@@ -535,3 +550,4 @@ class InMemoryConfigStore:
                 })
                 count += 1
         return count
+

@@ -189,4 +189,114 @@ class TestPermissions:
         assert res.status_code == 403
 
 
+class TestUserCreatedFromFrontendScenario:
+    """Reproduce the reported scenario: create a user from the admin panel,
+    assign a permission, logout, and login from scratch.
+    """
+
+    def test_created_user_can_login_and_needs_query_permission(self, auth_client, store):
+        # Admin (soporte@gmail.com) creates a new user with a known password.
+        auth_client.post("/auth/login", json={
+            "email": "soporte@gmail.com",
+            "password": "123456",
+        })
+        create_res = auth_client.post("/admin/users", json={
+            "email": "usuario@gmail.com",
+            "password": "123456",
+            "role": "user",
+            "active": True,
+        })
+        assert create_res.status_code == 201, create_res.text
+        new_user = create_res.json()
+        new_user_id = new_user["id"]
+
+        # Assign only the 'Nuevo Query' permission.
+        perm_res = auth_client.post(f"/admin/users/{new_user_id}/permissions", json={
+            "permission_id": "menu.cargar.create",
+            "granted": True,
+        })
+        assert perm_res.status_code == 200, perm_res.text
+
+        # Logout admin.
+        logout_res = auth_client.post("/auth/logout")
+        assert logout_res.status_code == 200
+
+        # New user logs in.
+        login_res = auth_client.post("/auth/login", json={
+            "email": "usuario@gmail.com",
+            "password": "123456",
+        })
+        assert login_res.status_code == 200, login_res.text
+        assert "access_token" in login_res.cookies
+
+        # User can hit /auth/me.
+        me_res = auth_client.get("/auth/me")
+        assert me_res.status_code == 200
+        assert me_res.json()["email"] == "usuario@gmail.com"
+
+        # User lacks menu.consultar.queries -> 403.
+        queries_res = auth_client.get("/queries/")
+        assert queries_res.status_code == 403
+
+        # Admin assigns menu.consultar.queries.
+        auth_client.post("/auth/login", json={
+            "email": "soporte@gmail.com",
+            "password": "123456",
+        })
+        grant_res = auth_client.post(f"/admin/users/{new_user_id}/permissions", json={
+            "permission_id": "menu.consultar.queries",
+            "granted": True,
+        })
+        assert grant_res.status_code == 200, grant_res.text
+
+        # New user logs back in and now can list queries.
+        auth_client.post("/auth/logout")
+        login2 = auth_client.post("/auth/login", json={
+            "email": "usuario@gmail.com",
+            "password": "123456",
+        })
+        assert login2.status_code == 200
+        queries2 = auth_client.get("/queries/")
+        assert queries2.status_code == 200
+
+    def test_user_with_no_permissions_can_login(self, auth_client, store):
+        """A user with no permissions must still be able to log in and
+        authenticate; they just won't see any menu items."""
+        # Admin creates a new user without assigning any permission.
+        auth_client.post("/auth/login", json={
+            "email": "soporte@gmail.com",
+            "password": "123456",
+        })
+        create_res = auth_client.post("/admin/users", json={
+            "email": "noperm@example.com",
+            "password": "123456",
+            "role": "user",
+            "active": True,
+        })
+        assert create_res.status_code == 201, create_res.text
+
+        # Logout admin and login with the new user.
+        auth_client.post("/auth/logout")
+        login_res = auth_client.post("/auth/login", json={
+            "email": "noperm@example.com",
+            "password": "123456",
+        })
+        assert login_res.status_code == 200, login_res.text
+        assert "access_token" in login_res.cookies
+
+        # /auth/me works.
+        me_res = auth_client.get("/auth/me")
+        assert me_res.status_code == 200
+        assert me_res.json()["email"] == "noperm@example.com"
+
+        # /permissions is empty.
+        perms_res = auth_client.get("/auth/permissions")
+        assert perms_res.status_code == 200
+        assert perms_res.json()["permissions"] == []
+
+        # Protected routes are forbidden, not unauthenticated.
+        queries_res = auth_client.get("/queries/")
+        assert queries_res.status_code == 403
+
+
 from auth import verify_password
