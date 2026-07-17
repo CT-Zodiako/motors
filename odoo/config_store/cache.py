@@ -74,3 +74,11 @@ class Cache:
 
     def invalidate_destinations(self) -> None:
         self.delete("destinations")
+
+    def invalidate_permissions(self) -> None:
+        self.delete("permissions")
+        # Best-effort: clear all user permission caches. Avoids stale data when
+        # the permission catalog is reseeded.
+        for key in list(self._store.keys()):
+            if key.startswith("user_permissions:"):
+                self.delete(key)

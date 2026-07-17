@@ -1,0 +1,77 @@
+.login-page {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0f4ff 0%, #e2e8f0 100%);
+  padding: 2rem;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border-radius: 12px;
+  padding: 2.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.login-brand i {
+  font-size: 2.5rem;
+  color: var(--primary-color);
+}
+
+.login-brand h1 {
+  margin: 0.75rem 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.login-brand p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field label {
+  font-weight: 600;
+  color: #334155;
+  font-size: 0.9rem;
+}
+
+.field input {
+  width: 100%;
+}
+
+.login-actions {
+  margin-top: 0.5rem;
+}
+
+.login-actions button {
+  width: 100%;
+}
+
+.hint {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
