@@ -409,14 +409,18 @@ export class QueryCreate implements OnInit {
 
     this.svc.update(q.name, payload).subscribe({
       next: (res) => {
-        this.propagationResult.set(res.propagation);
-        this.showPropagationDialog.set(true);
-        this.msg.add({ severity: 'success', summary: '¡Listo!', detail: `Query "${q.name}" actualizado` });
         this.saving.set(false);
         this.editState.clear();
         this.isEditMode.set(false);
         this.editingQuery.set(null);
         this.originalFields.set([]);
+        if (res.propagation && res.propagation.total > 0) {
+          this.propagationResult.set(res.propagation);
+          this.showPropagationDialog.set(true);
+        } else {
+          this.onNavigateToTab?.('list');
+        }
+        this.msg.add({ severity: 'success', summary: '¡Listo!', detail: `Query "${q.name}" actualizado` });
       },
       error: (err) => {
         this.msg.add({ severity: 'error', summary: 'Error', detail: err?.error?.detail || 'No se pudo actualizar' });

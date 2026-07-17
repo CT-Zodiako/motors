@@ -133,4 +133,37 @@
       </ng-template>
     </p-table>
   </div>
+
+  @if (showDeleteConfirm()) {
+    <p-dialog
+      [visible]="showDeleteConfirm()"
+      (visibleChange)="showDeleteConfirm.set($event)"
+      header="Confirmar eliminación"
+      [modal]="true"
+      [style]="{ width: '460px' }"
+      [closable]="false"
+    >
+      <div class="delete-confirm-summary">
+        <div class="delete-confirm-warning">
+          <span class="warning-icon">🗑️</span>
+          <div class="warning-text">
+            <p class="warning-title">¿Eliminar el query {{ queryToDelete()?.name }}?</p>
+            <p class="warning-subtitle">
+              Se va a borrar la consulta guardada. Las tablas de BigQuery que ya recibieron datos no se eliminan automáticamente; solo dejarán de recibir actualizaciones desde este query.
+            </p>
+          </div>
+        </div>
+
+        <div class="delete-confirm-note">
+          <i class="pi pi-lock"></i>
+          <span>Esta acción no se puede deshacer.</span>
+        </div>
+      </div>
+
+      <div class="dialog-actions">
+        <p-button label="Cancelar" [text]="true" (onClick)="cancelDelete()" />
+        <p-button label="Eliminar query" icon="pi pi-trash" severity="danger" (onClick)="confirmDelete()" />
+      </div>
+    </p-dialog>
+  }
 </div>
