@@ -3,9 +3,28 @@
     <div>
       <h1>{{ name() || 'Dashboards' }}</h1>
     </div>
+    <div class="header-actions">
+      @if (!isFullscreen()) {
+        <button type="button" class="btn-fullscreen" (click)="enterFullscreen()" title="Pantalla completa">
+          <i class="pi pi-window-maximize"></i>
+          <span>Pantalla completa</span>
+        </button>
+      } @else {
+        <button type="button" class="btn-fullscreen" (click)="exitFullscreen()" title="Salir de pantalla completa">
+          <i class="pi pi-window-minimize"></i>
+          <span>Salir</span>
+        </button>
+      }
+    </div>
   </div>
 
-  <div class="page-card">
+  <div class="page-card" #dashboardContainer>
+    @if (isFullscreen()) {
+      <button type="button" class="btn-exit-float" (click)="exitFullscreen()" title="Salir de pantalla completa">
+        <i class="pi pi-window-minimize"></i>
+        <span>Salir</span>
+      </button>
+    }
     @if (loading()) {
       <p>Cargando dashboard...</p>
     } @else if (notFound()) {
