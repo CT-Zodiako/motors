@@ -1,0 +1,19 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>{{ name() || 'Dashboards' }}</h1>
+    </div>
+  </div>
+
+  <div class="page-card">
+    @if (loading()) {
+      <p>Cargando dashboard...</p>
+    } @else if (notFound()) {
+      <p>No hay ningún dashboard configurado para esta sección.</p>
+    } @else if (error()) {
+      <p>No se pudo cargar el dashboard. Intentá nuevamente más tarde.</p>
+    } @else if (embedUrl()) {
+      <iframe [src]="embedUrl()" class="dashboard-iframe"></iframe>
+    }
+  </div>
+</div>

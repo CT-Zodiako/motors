@@ -8,6 +8,7 @@ import { UserAdminComponent } from './pages/user-admin/user-admin';
 import { LoginComponent } from './pages/login/login';
 import { ChangePasswordComponent } from './pages/change-password/change-password';
 import { WelcomeComponent } from './pages/welcome/welcome';
+import { DashboardViewer } from './pages/dashboard-viewer/dashboard-viewer';
 import { ToastModule } from 'primeng/toast';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
@@ -15,7 +16,7 @@ import { MessageService } from 'primeng/api';
 import { AuthService } from './services/auth';
 import { APP_VERSION } from './version';
 
-type Tab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload' | 'admin' | 'change-password';
+type Tab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload' | 'admin' | 'change-password' | 'dashboards' | 'dashboards-ventas';
 
 interface MenuNode {
   id?: Tab;
@@ -27,7 +28,7 @@ interface MenuNode {
 
 @Component({
   selector: 'app-root',
-  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, WelcomeComponent, ToastModule, ButtonModule, TooltipModule],
+  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, WelcomeComponent, DashboardViewer, ToastModule, ButtonModule, TooltipModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
@@ -63,6 +64,13 @@ export class App implements OnInit {
       label: 'Administración',
       children: [
         { id: 'admin', label: 'Usuarios', icon: 'pi-users', permission: 'menu.admin.usuarios' },
+      ]
+    },
+    {
+      label: 'Visualizaciones',
+      children: [
+        { id: 'dashboards', label: 'Dashboards', icon: 'pi-chart-bar', permission: 'menu.visualizaciones.dashboards' },
+        { id: 'dashboards-ventas', label: 'Ventas', icon: 'pi-chart-line', permission: 'menu.visualizaciones.ventas' },
       ]
     }
   ];

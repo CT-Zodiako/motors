@@ -632,6 +632,16 @@ class BigQueryConfigStore:
         self._cache.invalidate_permissions()
 
     # ------------------------------------------------------------------
+    # dashboards
+    # ------------------------------------------------------------------
+
+    def get_dashboard_by_menu_key(self, menu_key: str) -> dict | None:
+        rows = self._query(sql.SQL_GET_DASHBOARD_BY_MENU_KEY(), [_string_param("menu_key", menu_key)])
+        if not rows:
+            return None
+        return codecs.decode_row("odoo_dashboards", rows[0])
+
+    # ------------------------------------------------------------------
     # Load-job helper (for bulk/seeds/migration, D9)
     # ------------------------------------------------------------------
 
