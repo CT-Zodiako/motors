@@ -22,6 +22,7 @@ class InMemoryConfigStore:
             "odoo_users": [],
             "odoo_permissions": [],
             "odoo_user_permissions": [],
+            "odoo_dashboards": [],
         }
         self._cache = Cache(ttl_seconds=30)
         self._next_id = 1
@@ -550,4 +551,14 @@ class InMemoryConfigStore:
                 })
                 count += 1
         return count
+
+    # ------------------------------------------------------------------
+    # dashboards
+    # ------------------------------------------------------------------
+
+    def get_dashboard_by_menu_key(self, menu_key: str) -> dict | None:
+        for r in self._data["odoo_dashboards"]:
+            if r.get("menu_key") == menu_key and r.get("active"):
+                return codecs.decode_row("odoo_dashboards", r)
+        return None
 

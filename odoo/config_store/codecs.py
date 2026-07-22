@@ -91,6 +91,14 @@ TABLE_SCHEMAS: dict[str, list[dict[str, Any]]] = {
         {"name": "permission_id", "type": "STRING", "mode": "REQUIRED"},
         {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
     ],
+    "odoo_dashboards": [
+        {"name": "id", "type": "INT64", "mode": "REQUIRED"},
+        {"name": "menu_key", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "name", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "embed_url", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
+        {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+    ],
 }
 
 # ---------------------------------------------------------------------------

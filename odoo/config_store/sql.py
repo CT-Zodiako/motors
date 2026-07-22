@@ -229,4 +229,9 @@ WHERE id = @id
 """
 SQL_DELETE_DESTINATIONS_BY_QUERY = lambda: f"DELETE FROM `{_t('query_destinations')}` WHERE query_name = @query_name"
 
+# ---------------------------------------------------------------------------
+# Dashboards
+# ---------------------------------------------------------------------------
+SQL_GET_DASHBOARD_BY_MENU_KEY = lambda: f"SELECT * FROM `{_t('odoo_dashboards')}` WHERE menu_key = @menu_key AND active = true"
+
 

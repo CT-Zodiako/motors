@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import admin, auth, bigquery, catalog, categories, explorer, export, file_upload, runner, schedules
+from routers import admin, auth, bigquery, catalog, categories, dashboards, explorer, export, file_upload, runner, schedules
 from auth import get_current_user
 
 app = FastAPI(title="Odoo Bridge API", version="1.0.0")
@@ -26,6 +26,7 @@ app.include_router(export.router, dependencies=[Depends(get_current_user)])
 app.include_router(bigquery.router, dependencies=[Depends(get_current_user)])
 app.include_router(file_upload.router, dependencies=[Depends(get_current_user)])
 app.include_router(schedules.router, dependencies=[Depends(get_current_user)])
+app.include_router(dashboards.router, dependencies=[Depends(get_current_user)])
 
 import logging
 

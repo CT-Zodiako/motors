@@ -130,6 +130,8 @@
       @if (activeTab() === 'schedules') { <app-schedule-manager /> }
       @if (activeTab() === 'admin') { <app-user-admin /> }
       @if (activeTab() === 'change-password') { <app-change-password /> }
+      @if (activeTab() === 'dashboards') { <app-dashboard-viewer menuKey="dashboards" /> }
+      @if (activeTab() === 'dashboards-ventas') { <app-dashboard-viewer menuKey="dashboards-ventas" /> }
     </main>
   </div>
 }

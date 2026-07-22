@@ -67,6 +67,8 @@ _SEED_PERMISSIONS: list[dict[str, Any]] = [
     {"id": "menu.cargar.upload", "label": "Cargar archivos", "category": "cargar"},
     {"id": "menu.cuenta.change_password", "label": "Cambiar contraseña", "category": "cuenta"},
     {"id": "menu.admin.usuarios", "label": "Administrar usuarios", "category": "admin"},
+    {"id": "menu.visualizaciones.dashboards", "label": "Ver dashboards", "category": "visualizaciones"},
+    {"id": "menu.visualizaciones.ventas", "label": "Ver dashboard de ventas", "category": "visualizaciones"},
 ]
 
 
