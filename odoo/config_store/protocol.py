@@ -86,4 +86,39 @@ class ConfigStore(Protocol):
     # ------------------------------------------------------------------
     # dashboards
     # ------------------------------------------------------------------
-    def get_dashboard_by_menu_key(self, menu_key: str) -> dict | None: ...
+    def get_dashboard_by_menu_key(self, menu_key: str) -> dict | None:
+        """Published-only lookup (active = true) for the view path. Unchanged."""
+        ...
+
+    def list_dashboards(self, include_unpublished: bool = False) -> list[dict]:
+        """List dashboards ordered by lower(name) ascending.
+
+        include_unpublished=False returns only active (published) rows;
+        True returns all rows.
+        """
+        ...
+
+    def get_dashboard_any(self, menu_key: str) -> dict | None:
+        """Lookup by menu_key with no active filter (admin path)."""
+        ...
+
+    def create_dashboard(self, row: dict) -> dict:
+        """Create a dashboard row. Raises ConflictError on duplicate menu_key.
+
+        Defaults: active=False (unpublished), created_at/updated_at=now.
+        """
+        ...
+
+    def update_dashboard(self, menu_key: str, patch: dict) -> dict:
+        """Merge-patch a dashboard keyed by menu_key.
+
+        Only keys present in patch are merged (name, menu_key, embed_url,
+        definition, active). Sets updated_at=now. Raises NotFoundError when
+        menu_key does not exist; ConflictError when a new menu_key collides
+        with another row.
+        """
+        ...
+
+    def delete_dashboard(self, menu_key: str) -> None:
+        """Delete a dashboard by menu_key. Raises NotFoundError when missing."""
+        ...

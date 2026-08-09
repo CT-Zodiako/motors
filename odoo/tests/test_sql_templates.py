@@ -65,3 +65,45 @@ class TestSqlTemplates:
         stmt = sql.SQL_DELETE_DESTINATIONS_BY_QUERY()
         assert "@query_name" in stmt
 
+
+
+class TestDashboardSqlTemplates:
+    """dashboard-crud-menu PR-1: dashboard CRUD templates (design §3.2)."""
+
+    def test_list_dashboards_published_only(self):
+        stmt = sql.SQL_LIST_DASHBOARDS()
+        assert "active = true" in stmt
+        assert "ORDER BY lower(name)" in stmt
+        assert "config.odoo_dashboards" in stmt
+
+    def test_list_all_dashboards(self):
+        stmt = sql.SQL_LIST_ALL_DASHBOARDS()
+        assert "active = true" not in stmt
+        assert "ORDER BY lower(name)" in stmt
+
+    def test_get_dashboard_any_by_menu_key(self):
+        stmt = sql.SQL_GET_DASHBOARD_ANY_BY_MENU_KEY()
+        assert "@menu_key" in stmt
+        assert "active" not in stmt
+
+    def test_count_dashboards_by_menu_key(self):
+        stmt = sql.SQL_COUNT_DASHBOARDS_BY_MENU_KEY()
+        assert "COUNT(*)" in stmt
+        assert "@menu_key" in stmt
+
+    def test_insert_dashboard_nullable_json_guard(self):
+        stmt = sql.SQL_INSERT_DASHBOARD()
+        assert "IF(@definition IS NULL, NULL, PARSE_JSON(@definition))" in stmt
+        for p in ("@id", "@menu_key", "@name", "@embed_url", "@active", "@created_at", "@updated_at"):
+            assert p in stmt
+
+    def test_update_dashboard_keyed_on_id(self):
+        stmt = sql.SQL_UPDATE_DASHBOARD()
+        assert "IF(@definition IS NULL, NULL, PARSE_JSON(@definition))" in stmt
+        assert "WHERE id = @id" in stmt
+        assert "updated_at = @updated_at" in stmt
+
+    def test_delete_dashboard_keyed_on_id(self):
+        stmt = sql.SQL_DELETE_DASHBOARD()
+        assert "DELETE FROM" in stmt
+        assert "WHERE id = @id" in stmt

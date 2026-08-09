@@ -186,11 +186,12 @@ class InMemoryConfigStore:
         self._cache.delete(f"user_permissions:{user_id}")
 
     def seed_permission_defaults(self) -> None:
-        if self._data["odoo_permissions"]:
-            return
         from .bootstrap import _SEED_PERMISSIONS
+        existing_ids = {r.get("id") for r in self._data["odoo_permissions"]}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         for perm in _SEED_PERMISSIONS:
+            if perm["id"] in existing_ids:
+                continue
             row = {
                 "id": perm["id"],
                 "label": perm["label"],
@@ -198,7 +199,7 @@ class InMemoryConfigStore:
                 "created_at": now,
             }
             self._data["odoo_permissions"].append(codecs.encode_row("odoo_permissions", row))
-        self._cache.delete("permissions")
+        self._cache.invalidate_permissions()
 
     def seed_defaults(self) -> None:
         # General category if empty
@@ -561,4 +562,58 @@ class InMemoryConfigStore:
             if r.get("menu_key") == menu_key and r.get("active"):
                 return codecs.decode_row("odoo_dashboards", r)
         return None
+
+    def list_dashboards(self, include_unpublished: bool = False) -> list[dict]:
+        rows = [codecs.decode_row("odoo_dashboards", r) for r in self._data["odoo_dashboards"]]
+        if not include_unpublished:
+            rows = [r for r in rows if r.get("active")]
+        rows.sort(key=lambda r: (r.get("name") or "").lower())
+        return rows
+
+    def get_dashboard_any(self, menu_key: str) -> dict | None:
+        for r in self._data["odoo_dashboards"]:
+            if r.get("menu_key") == menu_key:
+                return codecs.decode_row("odoo_dashboards", r)
+        return None
+
+    def create_dashboard(self, row: dict) -> dict:
+        menu_key = row["menu_key"]
+        if any(r.get("menu_key") == menu_key for r in self._data["odoo_dashboards"]):
+            raise ConflictError(f"Dashboard with menu_key {menu_key} already exists")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        clean_row = {
+            "id": row.get("id", self._new_id()),
+            "menu_key": menu_key,
+            "name": row["name"],
+            "embed_url": row.get("embed_url"),
+            "definition": row.get("definition"),
+            "active": row.get("active", False),
+            "created_at": row.get("created_at", now),
+            "updated_at": row.get("updated_at", now),
+        }
+        self._data["odoo_dashboards"].append(codecs.encode_row("odoo_dashboards", clean_row))
+        return codecs.decode_row("odoo_dashboards", clean_row)
+
+    def update_dashboard(self, menu_key: str, patch: dict) -> dict:
+        for i, r in enumerate(self._data["odoo_dashboards"]):
+            if r.get("menu_key") == menu_key:
+                decoded = codecs.decode_row("odoo_dashboards", r)
+                new_key = patch.get("menu_key")
+                if new_key is not None and new_key != menu_key:
+                    if any(x.get("menu_key") == new_key for x in self._data["odoo_dashboards"]):
+                        raise ConflictError(f"Dashboard with menu_key {new_key} already exists")
+                for field in ("menu_key", "name", "embed_url", "definition", "active"):
+                    if field in patch:
+                        decoded[field] = patch[field]
+                decoded["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+                self._data["odoo_dashboards"][i] = codecs.encode_row("odoo_dashboards", decoded)
+                return decoded
+        raise NotFoundError(f"Dashboard {menu_key} not found")
+
+    def delete_dashboard(self, menu_key: str) -> None:
+        if self.get_dashboard_any(menu_key) is None:
+            raise NotFoundError(f"Dashboard {menu_key} not found")
+        self._data["odoo_dashboards"] = [
+            r for r in self._data["odoo_dashboards"] if r.get("menu_key") != menu_key
+        ]
 

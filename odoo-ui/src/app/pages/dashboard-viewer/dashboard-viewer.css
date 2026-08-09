@@ -64,6 +64,21 @@
   position: relative;
 }
 
+.unavailable-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--app-text);
+}
+
+.unavailable-panel > i {
+  font-size: 28px;
+  color: var(--app-primary);
+}
+
 .page-card:fullscreen {
   width: 100vw;
   height: 100vh;

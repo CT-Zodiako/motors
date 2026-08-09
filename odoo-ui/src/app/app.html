@@ -130,8 +130,8 @@
       @if (activeTab() === 'schedules') { <app-schedule-manager /> }
       @if (activeTab() === 'admin') { <app-user-admin /> }
       @if (activeTab() === 'change-password') { <app-change-password /> }
-      @if (activeTab() === 'dashboards') { <app-dashboard-viewer menuKey="dashboards" /> }
-      @if (activeTab() === 'dashboards-ventas') { <app-dashboard-viewer menuKey="dashboards-ventas" /> }
+      @if (dashboardMenuKey(); as key) { <app-dashboard-viewer [menuKey]="key" (unavailable)="setTab('home')" /> }
+      @if (activeTab() === 'admin-dashboards') { <app-dashboard-admin (dashboardsChanged)="refreshDashboards()" /> }
     </main>
   </div>
 }

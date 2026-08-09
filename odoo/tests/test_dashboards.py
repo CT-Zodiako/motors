@@ -24,6 +24,29 @@ def test_get_dashboard_200(client, store):
     body = res.json()
     assert body["name"] == "Ventas"
     assert body["embed_url"] == "https://datastudio.google.com/embed/reporting/abc/page/1"
+    # Additive field (dashboard-crud-menu DD4): embed dashboards expose definition: null.
+    assert body["definition"] is None
+
+
+def test_get_native_dashboard_returns_definition(client, store):
+    store.create_dashboard({
+        "menu_key": "native-dash",
+        "name": "Native",
+        "embed_url": None,
+        "definition": {
+            "model": "sale.order",
+            "fields": ["amount_total"],
+            "group_by": ["user_id"],
+            "domain": [],
+            "aggregations": {"amount_total": "sum"},
+        },
+        "active": True,
+    })
+    res = client.get("/dashboards/native-dash")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["embed_url"] is None
+    assert body["definition"]["model"] == "sale.order"
 
 
 def test_get_dashboard_unknown_404(client, store):

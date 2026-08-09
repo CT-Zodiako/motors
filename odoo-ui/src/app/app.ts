@@ -9,14 +9,19 @@ import { LoginComponent } from './pages/login/login';
 import { ChangePasswordComponent } from './pages/change-password/change-password';
 import { WelcomeComponent } from './pages/welcome/welcome';
 import { DashboardViewer } from './pages/dashboard-viewer/dashboard-viewer';
+import { DashboardAdmin } from './pages/dashboard-admin/dashboard-admin';
 import { ToastModule } from 'primeng/toast';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { AuthService } from './services/auth';
+import { DashboardsService } from './services/dashboards';
 import { APP_VERSION } from './version';
 
-type Tab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload' | 'admin' | 'change-password' | 'dashboards' | 'dashboards-ventas';
+type StaticTab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload'
+  | 'admin' | 'admin-dashboards' | 'change-password';
+type DashboardTab = `dashboard:${string}`;
+type Tab = StaticTab | DashboardTab;
 
 interface MenuNode {
   id?: Tab;
@@ -28,13 +33,14 @@ interface MenuNode {
 
 @Component({
   selector: 'app-root',
-  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, WelcomeComponent, DashboardViewer, ToastModule, ButtonModule, TooltipModule],
+  imports: [QueryList, QueryCreate, QueryRunner, ScheduleManager, FileUpload, UserAdminComponent, LoginComponent, ChangePasswordComponent, WelcomeComponent, DashboardViewer, DashboardAdmin, ToastModule, ButtonModule, TooltipModule],
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
 export class App implements OnInit {
   private auth = inject(AuthService);
   private msg = inject(MessageService);
+  private dashboards = inject(DashboardsService);
 
   activeTab = signal<Tab>('home');
   authenticated = this.auth.isAuthenticated;
@@ -42,9 +48,9 @@ export class App implements OnInit {
   sidebarCollapsed = signal(false);
   appVersion = APP_VERSION;
 
-  // Hierarchical menu definition. Supports 2 levels today and 3+ levels tomorrow
-  // via the recursive filterMenu / render helpers.
-  menuTree: MenuNode[] = [
+  // Static menu definition (design §5.2): dynamic dashboard entries are merged
+  // from the published dashboard list; Visualizaciones has no hardcoded children.
+  private staticMenu: MenuNode[] = [
     {
       label: 'Consultar',
       children: [
@@ -64,30 +70,61 @@ export class App implements OnInit {
       label: 'Administración',
       children: [
         { id: 'admin', label: 'Usuarios', icon: 'pi-users', permission: 'menu.admin.usuarios' },
+        { id: 'admin-dashboards', label: 'Dashboards', icon: 'pi-chart-bar', permission: 'menu.admin.dashboards' },
       ]
     },
-    {
-      label: 'Visualizaciones',
-      children: [
-        { id: 'dashboards', label: 'Dashboards', icon: 'pi-chart-bar', permission: 'menu.visualizaciones.dashboards' },
-        { id: 'dashboards-ventas', label: 'Ventas', icon: 'pi-chart-line', permission: 'menu.visualizaciones.ventas' },
-      ]
-    }
   ];
+
+  // Dynamic dashboard entries derived from GET /dashboards/ (spec §6).
+  dashboardItems = signal<MenuNode[]>([]);
+
+  // Hierarchical menu definition. Supports 2 levels today and 3+ levels tomorrow
+  // via the recursive filterMenu / render helpers. The Visualizaciones group only
+  // exists while there is at least one published dashboard (spec §6).
+  menuTree = computed<MenuNode[]>(() => {
+    const items = this.dashboardItems();
+    return items.length > 0
+      ? [...this.staticMenu, { label: 'Visualizaciones', children: items }]
+      : [...this.staticMenu];
+  });
 
   // Footer items rendered outside the recursive menu tree.
   accountMenu: MenuNode[] = [
     { id: 'change-password', label: 'Cambiar contraseña', icon: 'pi-lock', permission: 'menu.cuenta.change_password' },
   ];
 
-  visibleMenu = computed(() => this.filterMenu(this.menuTree));
+  visibleMenu = computed(() => this.filterMenu(this.menuTree()));
   visibleAccountMenu = computed(() => this.filterMenu(this.accountMenu));
   hasAnyMenu = computed(() => this.visibleMenu().length > 0 || this.visibleAccountMenu().length > 0);
+
+  // Content-branch helpers (design §5.2): `dashboard:` is a literal prefix and
+  // menu_key cannot contain ':' per the backend MENU_KEY_RE, so the split is
+  // unambiguous.
+  isDashboardTab = (tab: Tab): boolean => tab.startsWith('dashboard:');
+  dashboardMenuKey = computed<string | null>(() => {
+    const tab = this.activeTab();
+    return this.isDashboardTab(tab) ? tab.slice('dashboard:'.length) : null;
+  });
 
   ngOnInit() {
     this.auth.fetchMe().subscribe({
       error: () => {},
-      complete: () => {},
+      complete: () => this.refreshDashboards(),
+    });
+  }
+
+  /** Reload the dynamic dashboard menu entries. Called after fetchMe() and by
+   *  the admin screen after any dashboard mutation (spec §6). */
+  refreshDashboards() {
+    this.dashboards.list().subscribe({
+      next: (rows) =>
+        this.dashboardItems.set(rows.map((d) => ({
+          id: `dashboard:${d.menu_key}` as Tab,
+          label: d.name,
+          icon: 'pi-chart-bar',
+          permission: 'menu.visualizaciones.dashboards',
+        }))),
+      error: () => this.dashboardItems.set([]),
     });
   }
 

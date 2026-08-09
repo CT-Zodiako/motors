@@ -33,6 +33,8 @@ describe('AuthService', () => {
     expect(req.request.body).toEqual({ email: 'a@b.com', password: 'pw' });
     expect(req.request.withCredentials).toBe(true);
     req.flush({ user });
+    // login triggers a follow-up permissions fetch (AuthService.fetchPermissions)
+    http.expectOne('http://localhost:8000/auth/permissions').flush({ permissions: [] });
 
     expect(got?.user).toEqual(user);
     expect(svc.isAuthenticated()).toBe(true);
@@ -42,6 +44,7 @@ describe('AuthService', () => {
     svc.login({ email: 'a@b.com', password: 'pw' }).subscribe();
     const loginReq = http.expectOne('http://localhost:8000/auth/login');
     loginReq.flush({ user: { id: '1', email: 'a@b.com', role: 'admin' } });
+    http.expectOne('http://localhost:8000/auth/permissions').flush({ permissions: [] });
     expect(svc.isAuthenticated()).toBe(true);
 
     svc.logout().subscribe();
@@ -60,6 +63,8 @@ describe('AuthService', () => {
     expect(req.request.method).toBe('GET');
     expect(req.request.withCredentials).toBe(true);
     req.flush(user);
+    // fetchMe triggers a follow-up permissions fetch (AuthService.fetchPermissions)
+    http.expectOne('http://localhost:8000/auth/permissions').flush({ permissions: [] });
     expect(svc.user()).toEqual(user);
   });
 
@@ -67,6 +72,7 @@ describe('AuthService', () => {
     svc.login({ email: 'a@b.com', password: 'pw' }).subscribe();
     const loginReq = http.expectOne('http://localhost:8000/auth/login');
     loginReq.flush({ user: { id: '1', email: 'a@b.com', role: 'admin' } });
+    http.expectOne('http://localhost:8000/auth/permissions').flush({ permissions: [] });
     expect(svc.isAuthenticated()).toBe(true);
 
     svc.fetchMe().subscribe((result) => {

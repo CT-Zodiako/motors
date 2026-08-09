@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
-from auth import require_permission
+from auth import require_any_permission
 from odoo_client import execute as odoo_execute
 
 router = APIRouter(prefix="/explore", tags=["explorer"])
 
 
 @router.get("/fields/{model}")
-def get_model_fields(model: str, user: dict = Depends(require_permission("menu.cargar.create"))):
+def get_model_fields(model: str, user: dict = Depends(require_any_permission("menu.cargar.create", "menu.admin.dashboards"))):
     fields = odoo_execute(
         model,
         "fields_get",
@@ -17,7 +17,7 @@ def get_model_fields(model: str, user: dict = Depends(require_permission("menu.c
 
 
 @router.get("/models")
-def get_all_models(user: dict = Depends(require_permission("menu.cargar.create"))):
+def get_all_models(user: dict = Depends(require_any_permission("menu.cargar.create", "menu.admin.dashboards"))):
     models = odoo_execute(
         "ir.model",
         "search_read",

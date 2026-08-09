@@ -1,0 +1,245 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h1>Administración de dashboards</h1>
+      <p class="subtitle">Gestioná los dashboards publicados y borradores.</p>
+    </div>
+    <p-button label="Nuevo dashboard" icon="pi pi-plus" styleClass="btn-new" (onClick)="openCreate()" />
+  </div>
+
+  <div class="page-card">
+    <p-table
+      [value]="dashboards()"
+      [loading]="loading()"
+      styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"
+    >
+      <ng-template #header>
+        <tr>
+          <th>Nombre</th>
+          <th>Clave</th>
+          <th>Tipo</th>
+          <th>Estado</th>
+          <th class="col-options">Acciones</th>
+        </tr>
+      </ng-template>
+
+      <ng-template #body let-row>
+        <tr [attr.data-menu-key]="row.menu_key">
+          <td>{{ row.name }}</td>
+          <td><code>{{ row.menu_key }}</code></td>
+          <td>
+            <p-tag [value]="row.definition ? 'Native' : 'Embed'" [severity]="row.definition ? 'info' : 'secondary'" />
+          </td>
+          <td>
+            <p-tag [value]="row.active ? 'Publicado' : 'Borrador'" [severity]="row.active ? 'success' : 'warn'" />
+          </td>
+          <td class="col-options">
+            <div class="row-actions">
+              <p-button icon="pi pi-pencil" severity="secondary" [text]="true" styleClass="btn-edit" (onClick)="openEdit(row)" pTooltip="Editar" />
+              <p-button
+                [icon]="row.active ? 'pi pi-eye-slash' : 'pi pi-eye'"
+                severity="secondary"
+                [text]="true"
+                styleClass="btn-toggle-active"
+                (onClick)="toggleActive(row)"
+                [pTooltip]="row.active ? 'Despublicar' : 'Publicar'"
+              />
+              <p-button icon="pi pi-trash" severity="danger" [text]="true" styleClass="btn-delete" (onClick)="askDelete(row)" pTooltip="Eliminar" />
+            </div>
+          </td>
+        </tr>
+      </ng-template>
+
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="5" class="empty-msg">No hay dashboards registrados.</td>
+        </tr>
+      </ng-template>
+    </p-table>
+  </div>
+
+  <p-dialog
+    [visible]="dialogVisible()"
+    (onHide)="dialogVisible.set(false)"
+    [header]="dialogTitle()"
+    [modal]="true"
+    [style]="{ width: '960px' }"
+  >
+    <div class="form-grid">
+      <div class="form-row">
+        <div class="form-field">
+          <label for="dash-name">Nombre</label>
+          <input id="dash-name" pInputText type="text" class="w-full" [ngModel]="formName()" (ngModelChange)="formName.set($event)" />
+        </div>
+        <div class="form-field">
+          <label for="dash-menu-key">Clave de menú</label>
+          <input id="dash-menu-key" pInputText type="text" class="w-full" placeholder="ventas-por-vendedor" [ngModel]="formMenuKey()" (ngModelChange)="formMenuKey.set($event)" />
+        </div>
+      </div>
+
+      <div class="form-field">
+        <label for="dash-type">Tipo</label>
+        <p-select
+          inputId="dash-type"
+          [options]="typeOptions"
+          optionLabel="label"
+          optionValue="value"
+          [ngModel]="formType()"
+          (ngModelChange)="formType.set($event)"
+          styleClass="w-full"
+        />
+      </div>
+
+      @if (formType() === 'embed') {
+        <div class="form-field">
+          <label for="dash-embed-url">URL de embed</label>
+          <input id="dash-embed-url" pInputText type="url" class="w-full" placeholder="https://..." [ngModel]="formEmbedUrl()" (ngModelChange)="formEmbedUrl.set($event)" />
+        </div>
+      } @else {
+        <div class="form-field">
+          <label for="dash-model">Modelo</label>
+          <p-select
+            inputId="dash-model"
+            [options]="modelOptions()"
+            optionLabel="label"
+            optionValue="value"
+            [filter]="true"
+            filterBy="label"
+            placeholder="Seleccioná un modelo"
+            [ngModel]="selectedModel()"
+            (ngModelChange)="onModelChange($event)"
+            styleClass="w-full"
+          />
+        </div>
+
+        @if (staleFields().length > 0) {
+          <div class="stale-warning">
+            <i class="pi pi-exclamation-triangle"></i>
+            <span>
+              Configuración inválida: {{ staleFields().length === 1 ? 'el campo' : 'los campos' }}
+              <strong>{{ staleFields().join(', ') }}</strong>
+              ya no {{ staleFields().length === 1 ? 'existe' : 'existen' }} en Odoo. Actualizá la definición antes de guardar.
+            </span>
+          </div>
+        }
+
+        @if (selectedModel()) {
+          @if (loadingFields()) {
+            <p>Cargando campos...</p>
+          } @else {
+            <div class="form-field">
+              <label for="dash-fields">Campos a agregar</label>
+              <p-multiselect
+                inputId="dash-fields"
+                [options]="fieldOptions()"
+                optionLabel="label"
+                optionValue="value"
+                [filter]="true"
+                filterBy="label"
+                placeholder="Seleccioná campos"
+                [ngModel]="selectedFields()"
+                (ngModelChange)="onFieldsChange($event)"
+                styleClass="w-full"
+              />
+            </div>
+
+            @if (selectedFields().length > 0) {
+              <div class="form-field">
+                <label>Agregación por campo</label>
+                @for (field of selectedFields(); track field) {
+                  <div class="agg-row">
+                    <span class="agg-field">{{ fieldMap().get(field)?.string ?? field }} <code>({{ field }})</code></span>
+                    <p-select
+                      [options]="aggregationOptionsFor(field)"
+                      optionLabel="label"
+                      optionValue="value"
+                      [ngModel]="aggregations()[field]"
+                      (ngModelChange)="setAggregation(field, $event)"
+                    />
+                  </div>
+                }
+              </div>
+            }
+
+            <div class="form-field">
+              <label for="dash-group-by">Agrupar por</label>
+              <p-multiselect
+                inputId="dash-group-by"
+                [options]="fieldOptions()"
+                optionLabel="label"
+                optionValue="value"
+                [filter]="true"
+                filterBy="label"
+                placeholder="Sin agrupación"
+                [ngModel]="groupBy()"
+                (ngModelChange)="groupBy.set($event)"
+                styleClass="w-full"
+              />
+            </div>
+
+            <div class="form-field">
+              <label>Filtros</label>
+              @for (filter of filters(); track $index) {
+                <div class="filter-row">
+                  <p-select
+                    [options]="fieldOptions()"
+                    optionLabel="label"
+                    optionValue="value"
+                    [filter]="true"
+                    filterBy="label"
+                    [ngModel]="filter.field"
+                    (ngModelChange)="updateFilter($index, { field: $event })"
+                  />
+                  <p-select
+                    [options]="operatorOptions"
+                    optionLabel="label"
+                    optionValue="value"
+                    [ngModel]="filter.operator"
+                    (ngModelChange)="updateFilter($index, { operator: $event })"
+                  />
+                  <input pInputText type="text" placeholder="Valor" [ngModel]="filter.value" (ngModelChange)="updateFilter($index, { value: $event })" />
+                  <p-button icon="pi pi-times" severity="danger" [text]="true" (onClick)="removeFilter($index)" pTooltip="Quitar filtro" />
+                </div>
+              }
+              <p-button label="Agregar filtro" icon="pi pi-plus" severity="secondary" [text]="true" (onClick)="addFilter()" />
+            </div>
+
+            <div class="form-field">
+              <p-button
+                label="Vista previa"
+                icon="pi pi-table"
+                severity="secondary"
+                styleClass="btn-preview"
+                [disabled]="!canPreview()"
+                [loading]="previewLoading()"
+                (onClick)="previewDashboard()"
+              />
+              @if (previewError()) {
+                <div class="form-error preview-error">{{ previewError() }}</div>
+              }
+              @if (previewData(); as preview) {
+                <div class="preview-panel">
+                  <app-dashboard-data-table [data]="preview" />
+                </div>
+              }
+            </div>
+          }
+        }
+      }
+
+      @if (formError()) {
+        <div class="form-error">
+          <i class="pi pi-times-circle"></i>
+          <span>{{ formError() }}</span>
+        </div>
+      }
+    </div>
+
+    <ng-template #footer>
+      <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="dialogVisible.set(false)" />
+      <p-button label="Guardar" icon="pi pi-check" styleClass="btn-save" [loading]="saving()" (onClick)="save()" />
+    </ng-template>
+  </p-dialog>
+
+  <p-confirmdialog />
+</div>

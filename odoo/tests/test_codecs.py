@@ -145,3 +145,50 @@ class TestValidators:
             validate_schedule({"interval_hours": 25})
         with pytest.raises(ValidationError):
             validate_schedule({"interval_hours": 0})
+
+
+class TestDashboardSchema:
+    """dashboard-crud-menu PR-1: odoo_dashboards additive schema extension."""
+
+    def test_embed_url_relaxed_to_nullable(self):
+        cols = {c["name"]: c for c in TABLE_SCHEMAS["odoo_dashboards"]}
+        assert cols["embed_url"]["mode"] == "NULLABLE"
+
+    def test_new_nullable_columns(self):
+        cols = {c["name"]: c for c in TABLE_SCHEMAS["odoo_dashboards"]}
+        assert cols["definition"]["type"] == "JSON"
+        assert cols["definition"]["mode"] == "NULLABLE"
+        assert cols["updated_at"]["type"] == "TIMESTAMP"
+        assert cols["updated_at"]["mode"] == "NULLABLE"
+
+    def test_legacy_row_decodes_unchanged(self):
+        """Legacy rows (no definition/updated_at keys) must decode without backfill."""
+        legacy = {
+            "id": 1,
+            "menu_key": "dashboards",
+            "name": "Dashboards",
+            "embed_url": "https://example.com/embed",
+            "active": True,
+            "created_at": "2024-01-01 00:00:00",
+        }
+        decoded = decode_row("odoo_dashboards", legacy)
+        assert decoded["embed_url"] == "https://example.com/embed"
+        assert decoded["active"] is True
+
+    def test_definition_roundtrip(self):
+        definition = {
+            "model": "sale.order",
+            "fields": ["amount_total"],
+            "group_by": ["user_id"],
+            "domain": [["state", "=", "sale"]],
+            "aggregations": {"amount_total": "sum"},
+        }
+        row = {"menu_key": "k", "definition": definition, "updated_at": None}
+        decoded = decode_row("odoo_dashboards", encode_row("odoo_dashboards", row))
+        assert decoded["definition"] == definition
+        assert decoded["updated_at"] is None
+
+    def test_none_definition_passthrough(self):
+        row = {"menu_key": "k", "definition": None}
+        decoded = decode_row("odoo_dashboards", encode_row("odoo_dashboards", row))
+        assert decoded["definition"] is None

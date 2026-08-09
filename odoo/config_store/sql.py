@@ -233,5 +233,22 @@ SQL_DELETE_DESTINATIONS_BY_QUERY = lambda: f"DELETE FROM `{_t('query_destination
 # Dashboards
 # ---------------------------------------------------------------------------
 SQL_GET_DASHBOARD_BY_MENU_KEY = lambda: f"SELECT * FROM `{_t('odoo_dashboards')}` WHERE menu_key = @menu_key AND active = true"
+SQL_LIST_DASHBOARDS = lambda: f"SELECT * FROM `{_t('odoo_dashboards')}` WHERE active = true ORDER BY lower(name)"
+SQL_LIST_ALL_DASHBOARDS = lambda: f"SELECT * FROM `{_t('odoo_dashboards')}` ORDER BY lower(name)"
+SQL_GET_DASHBOARD_ANY_BY_MENU_KEY = lambda: f"SELECT * FROM `{_t('odoo_dashboards')}` WHERE menu_key = @menu_key"
+SQL_COUNT_DASHBOARDS_BY_MENU_KEY = lambda: f"SELECT COUNT(*) AS n FROM `{_t('odoo_dashboards')}` WHERE menu_key = @menu_key"
+SQL_INSERT_DASHBOARD = lambda: f"""
+INSERT INTO `{_t('odoo_dashboards')}`
+  (id, menu_key, name, embed_url, definition, active, created_at, updated_at)
+VALUES (@id, @menu_key, @name, @embed_url, IF(@definition IS NULL, NULL, PARSE_JSON(@definition)), @active, @created_at, @updated_at)
+"""
+SQL_UPDATE_DASHBOARD = lambda: f"""
+UPDATE `{_t('odoo_dashboards')}`
+SET menu_key = @menu_key, name = @name, embed_url = @embed_url,
+    definition = IF(@definition IS NULL, NULL, PARSE_JSON(@definition)),
+    active = @active, updated_at = @updated_at
+WHERE id = @id
+"""
+SQL_DELETE_DASHBOARD = lambda: f"DELETE FROM `{_t('odoo_dashboards')}` WHERE id = @id"
 
 

@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 def startup():
     # WU6: bootstrap BigQueryConfigStore directly; PostgreSQL is no longer used.
     import time
-    from config_store.bootstrap import ensure_schema, seed_defaults
+    from config_store.bootstrap import (
+        ensure_schema,
+        grant_admin_permissions,
+        seed_dashboard_defaults,
+        seed_defaults,
+    )
     from config_store.bq_store import BigQueryConfigStore
     from config_store import set_store
 
@@ -50,6 +55,10 @@ def startup():
             from auth_seed import seed_default_user
             seed_default_user(_config_store, get_password_hash)
             _config_store.seed_permission_defaults()
+            # dashboard-crud-menu: grant menu.admin.* to admins + seed legacy embed dashboards.
+            # Seed embed URLs come from SEED_DASHBOARD_EMBED_URL / SEED_DASHBOARD_VENTAS_EMBED_URL.
+            grant_admin_permissions(_config_store)
+            seed_dashboard_defaults(_config_store)
             logger.info("config_store bootstrap OK (BigQueryConfigStore)")
             break
         except Exception as e:

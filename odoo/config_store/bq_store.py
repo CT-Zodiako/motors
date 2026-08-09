@@ -42,6 +42,27 @@ def _bool_param(name: str, value: bool | None) -> bigquery.ScalarQueryParameter:
     return bigquery.ScalarQueryParameter(name, "BOOL", value)
 
 
+def _nullable_json_string_param(name: str, value: Any) -> bigquery.ScalarQueryParameter:
+    """JSON param that binds a true SQL NULL when value is None (unlike _json_param)."""
+    if value is None:
+        return bigquery.ScalarQueryParameter(name, "STRING", None)
+    return _json_param(name, value)
+
+
+def _dashboard_params(row: dict[str, Any]) -> list[bigquery.ScalarQueryParameter]:
+    """Scalar params for odoo_dashboards DML (definition stays NULL when unset)."""
+    return [
+        _int64_param("id", row["id"]),
+        _string_param("menu_key", row["menu_key"]),
+        _string_param("name", row["name"]),
+        _string_param("embed_url", row.get("embed_url")),
+        _nullable_json_string_param("definition", row.get("definition")),
+        _bool_param("active", row["active"]),
+        _timestamp_param("created_at", row.get("created_at")),
+        _timestamp_param("updated_at", row.get("updated_at")),
+    ]
+
+
 def _int64_param(name: str, value: int | None) -> bigquery.ScalarQueryParameter:
     return bigquery.ScalarQueryParameter(name, "INT64", value)
 
@@ -113,9 +134,44 @@ class BigQueryConfigStore:
             table_ref = dataset_ref.table(table_name)
             bq_schema = [SchemaField(c["name"], c["type"], mode=c.get("mode", "NULLABLE")) for c in schema]
             try:
-                self._client.get_table(table_ref)
+                existing_table = self._client.get_table(table_ref)
             except Exception:
                 self._client.create_table(bigquery.Table(table_ref, schema=bq_schema), exists_ok=True)
+            else:
+                if table_name == "odoo_dashboards":
+                    self._reconcile_dashboards_schema(existing_table)
+
+    def _reconcile_dashboards_schema(self, table) -> None:
+        """Additive, idempotent reconcile of an existing odoo_dashboards table.
+
+        Adds missing columns via ALTER TABLE ... ADD COLUMN IF NOT EXISTS and
+        relaxes REQUIRED -> NULLABLE modes (embed_url) via a merged-schema
+        update_table. BigQuery permits both without touching existing rows.
+        """
+        desired = {c["name"]: c for c in codecs.TABLE_SCHEMAS["odoo_dashboards"]}
+        existing = {f.name: f for f in table.schema}
+        # 1. Add missing columns (idempotent).
+        for name, col in desired.items():
+            if name not in existing:
+                self._query(
+                    f"ALTER TABLE `{sql._t('odoo_dashboards')}` "
+                    f"ADD COLUMN IF NOT EXISTS {name} {col['type']}"
+                )
+        # 2. Relax modes via merged schema (never drops columns).
+        merged = []
+        needs_relax = False
+        for f in table.schema:
+            col = desired.get(f.name)
+            mode = col.get("mode", "NULLABLE") if col else f.mode
+            if f.mode == "REQUIRED" and mode != "REQUIRED":
+                needs_relax = True
+            merged.append(SchemaField(f.name, f.field_type, mode=mode))
+        for name, col in desired.items():
+            if name not in existing:
+                merged.append(SchemaField(name, col["type"], mode=col.get("mode", "NULLABLE")))
+        if needs_relax:
+            table.schema = merged
+            self._client.update_table(table, ["schema"])
 
     def seed_defaults(self) -> None:
         # General category if empty
@@ -615,12 +671,12 @@ class BigQueryConfigStore:
         self._cache.delete(f"user_permissions:{user_id}")
 
     def seed_permission_defaults(self) -> None:
-        existing = self._query(sql.SQL_COUNT_PERMISSIONS())
-        if existing[0]["n"] > 0:
-            return
         from .bootstrap import _SEED_PERMISSIONS
+        existing_ids = {p["id"] for p in self.list_permissions()}
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         for perm in _SEED_PERMISSIONS:
+            if perm["id"] in existing_ids:
+                continue
             row = {
                 "id": perm["id"],
                 "label": perm["label"],
@@ -640,6 +696,59 @@ class BigQueryConfigStore:
         if not rows:
             return None
         return codecs.decode_row("odoo_dashboards", rows[0])
+
+    def list_dashboards(self, include_unpublished: bool = False) -> list[dict]:
+        stmt = sql.SQL_LIST_ALL_DASHBOARDS() if include_unpublished else sql.SQL_LIST_DASHBOARDS()
+        rows = self._query(stmt)
+        return [codecs.decode_row("odoo_dashboards", r) for r in rows]
+
+    def get_dashboard_any(self, menu_key: str) -> dict | None:
+        rows = self._query(sql.SQL_GET_DASHBOARD_ANY_BY_MENU_KEY(), [_string_param("menu_key", menu_key)])
+        if not rows:
+            return None
+        return codecs.decode_row("odoo_dashboards", rows[0])
+
+    def create_dashboard(self, row: dict) -> dict:
+        menu_key = row["menu_key"]
+        dup = self._query(sql.SQL_COUNT_DASHBOARDS_BY_MENU_KEY(), [_string_param("menu_key", menu_key)])
+        if dup[0]["n"] > 0:
+            raise ConflictError(f"Dashboard with menu_key {menu_key} already exists")
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        full_row = {
+            "id": row.get("id", self._next_id()),
+            "menu_key": menu_key,
+            "name": row["name"],
+            "embed_url": row.get("embed_url"),
+            "definition": row.get("definition"),
+            "active": row.get("active", False),
+            "created_at": row.get("created_at", now),
+            "updated_at": row.get("updated_at", now),
+        }
+        self._query(sql.SQL_INSERT_DASHBOARD(), _dashboard_params(full_row))
+        return self.get_dashboard_any(menu_key)
+
+    def update_dashboard(self, menu_key: str, patch: dict) -> dict:
+        current = self.get_dashboard_any(menu_key)
+        if current is None:
+            raise NotFoundError(f"Dashboard {menu_key} not found")
+        new_key = patch.get("menu_key")
+        if new_key is not None and new_key != menu_key:
+            dup = self._query(sql.SQL_COUNT_DASHBOARDS_BY_MENU_KEY(), [_string_param("menu_key", new_key)])
+            if dup[0]["n"] > 0:
+                raise ConflictError(f"Dashboard with menu_key {new_key} already exists")
+        merged = dict(current)
+        for field in ("menu_key", "name", "embed_url", "definition", "active"):
+            if field in patch:
+                merged[field] = patch[field]
+        merged["updated_at"] = datetime.now(timezone.utc).replace(tzinfo=None)
+        self._query(sql.SQL_UPDATE_DASHBOARD(), _dashboard_params(merged))
+        return self.get_dashboard_any(merged["menu_key"])
+
+    def delete_dashboard(self, menu_key: str) -> None:
+        current = self.get_dashboard_any(menu_key)
+        if current is None:
+            raise NotFoundError(f"Dashboard {menu_key} not found")
+        self._query(sql.SQL_DELETE_DASHBOARD(), [_int64_param("id", current["id"])])
 
     # ------------------------------------------------------------------
     # Load-job helper (for bulk/seeds/migration, D9)

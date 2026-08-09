@@ -4,16 +4,18 @@
       <h1>{{ name() || 'Dashboards' }}</h1>
     </div>
     <div class="header-actions">
-      @if (!isFullscreen()) {
-        <button type="button" class="btn-fullscreen" (click)="enterFullscreen()" title="Pantalla completa">
-          <i class="pi pi-window-maximize"></i>
-          <span>Pantalla completa</span>
-        </button>
-      } @else {
-        <button type="button" class="btn-fullscreen" (click)="exitFullscreen()" title="Salir de pantalla completa">
-          <i class="pi pi-window-minimize"></i>
-          <span>Salir</span>
-        </button>
+      @if (embedUrl()) {
+        @if (!isFullscreen()) {
+          <button type="button" class="btn-fullscreen" (click)="enterFullscreen()" title="Pantalla completa">
+            <i class="pi pi-window-maximize"></i>
+            <span>Pantalla completa</span>
+          </button>
+        } @else {
+          <button type="button" class="btn-fullscreen" (click)="exitFullscreen()" title="Salir de pantalla completa">
+            <i class="pi pi-window-minimize"></i>
+            <span>Salir</span>
+          </button>
+        }
       }
     </div>
   </div>
@@ -28,11 +30,20 @@
     @if (loading()) {
       <p>Cargando dashboard...</p>
     } @else if (notFound()) {
-      <p>No hay ningún dashboard configurado para esta sección.</p>
+      <div class="unavailable-panel">
+        <i class="pi pi-exclamation-triangle"></i>
+        <p>{{ unavailableMessage() }}</p>
+        <button type="button" class="btn-fullscreen" (click)="unavailable.emit()">
+          <i class="pi pi-home"></i>
+          <span>Volver al inicio</span>
+        </button>
+      </div>
     } @else if (error()) {
       <p>No se pudo cargar el dashboard. Intentá nuevamente más tarde.</p>
     } @else if (embedUrl()) {
       <iframe [src]="embedUrl()" class="dashboard-iframe"></iframe>
+    } @else if (nativeData(); as data) {
+      <app-dashboard-data-table [data]="data" />
     }
   </div>
 </div>

@@ -95,9 +95,11 @@ TABLE_SCHEMAS: dict[str, list[dict[str, Any]]] = {
         {"name": "id", "type": "INT64", "mode": "REQUIRED"},
         {"name": "menu_key", "type": "STRING", "mode": "REQUIRED"},
         {"name": "name", "type": "STRING", "mode": "REQUIRED"},
-        {"name": "embed_url", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "embed_url", "type": "STRING", "mode": "NULLABLE"},
+        {"name": "definition", "type": "JSON", "mode": "NULLABLE"},
         {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
         {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
+        {"name": "updated_at", "type": "TIMESTAMP", "mode": "NULLABLE"},
     ],
 }
 

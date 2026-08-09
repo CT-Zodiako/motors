@@ -115,3 +115,20 @@ def require_permission(permission_id: str):
         return user
 
     return _check_permission
+
+
+def require_any_permission(*permission_ids: str):
+    """FastAPI dependency factory: verify the current user has ANY of the permissions."""
+
+    def _check_permission(user: dict = Depends(get_current_user)):
+        from config_store import get_store
+
+        permissions = get_store().get_user_permissions(user["id"])
+        if not any(p in permissions for p in permission_ids):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Permission denied",
+            )
+        return user
+
+    return _check_permission

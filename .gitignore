@@ -31,3 +31,6 @@ Presupuestos_2026_modelo - Odoo (1).xlsx
 # Local-only docs and SDD tracking (kept locally, not in remote)
 MANUAL_USUARIO.md
 openspec/
+
+# Service account keys - never commit
+odoo/bigquery.json

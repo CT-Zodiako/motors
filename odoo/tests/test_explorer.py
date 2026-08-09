@@ -64,3 +64,44 @@ def test_fields_endpoint_requests_enriched_field_attributes(monkeypatch):
     attributes = captured["kwargs"].get("attributes", [])
     for expected in ["string", "type", "required", "readonly", "relation", "help"]:
         assert expected in attributes, f"fields_get must request '{expected}'"
+
+
+class TestDualPermissionGuards:
+    """dashboard-crud-menu: /explore/models + /explore/fields accept EITHER
+    menu.cargar.create OR menu.admin.dashboards."""
+
+    def _mock_odoo(self, monkeypatch):
+        def fake_execute(model, method, args, kwargs=None):
+            if method == "fields_get":
+                return {"name": {"type": "char", "string": "Name"}}
+            return [{"name": "Sale Order", "model": "sale.order", "info": ""}]
+
+        monkeypatch.setattr(explorer, "odoo_execute", fake_execute)
+
+    def _revoke(self, store, *permission_ids):
+        for pid in permission_ids:
+            store.revoke_user_permission("test-user-id", pid)
+
+    def test_admin_dashboards_permission_grants_models_access(self, client, store, monkeypatch):
+        self._mock_odoo(monkeypatch)
+        self._revoke(store, "menu.cargar.create")
+        res = client.get("/explore/models")
+        assert res.status_code == 200
+
+    def test_admin_dashboards_permission_grants_fields_access(self, client, store, monkeypatch):
+        self._mock_odoo(monkeypatch)
+        self._revoke(store, "menu.cargar.create")
+        res = client.get("/explore/fields/sale.order")
+        assert res.status_code == 200
+
+    def test_cargar_only_behavior_unchanged(self, client, store, monkeypatch):
+        self._mock_odoo(monkeypatch)
+        self._revoke(store, "menu.admin.dashboards")
+        assert client.get("/explore/models").status_code == 200
+        assert client.get("/explore/fields/sale.order").status_code == 200
+
+    def test_neither_permission_403(self, client, store, monkeypatch):
+        self._mock_odoo(monkeypatch)
+        self._revoke(store, "menu.cargar.create", "menu.admin.dashboards")
+        assert client.get("/explore/models").status_code == 403
+        assert client.get("/explore/fields/sale.order").status_code == 403
