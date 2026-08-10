@@ -49,7 +49,7 @@ describe('DashboardViewer', () => {
 
   function createViewer(menuKey: string) {
     const fixture = TestBed.createComponent(DashboardViewer);
-    fixture.componentInstance.menuKey = menuKey;
+    fixture.componentRef.setInput('menuKey', menuKey);
     fixture.detectChanges();
     return fixture;
   }
@@ -127,6 +127,31 @@ describe('DashboardViewer', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain("Field 'x_custom' no longer exists on model 'sale.order'");
     expect(el.querySelector('iframe')).toBeNull();
+  });
+
+  it('switching menuKey refetches and renders the newly selected dashboard', () => {
+    const fixture = createViewer('dashboards');
+    http.expectOne('http://localhost:8000/dashboards/dashboards').flush({
+      name: 'Dashboards',
+      embed_url: 'https://bi.example/embed',
+      definition: null,
+    });
+    fixture.detectChanges();
+    expect(String(fixture.nativeElement.querySelector('iframe').src)).toContain(
+      'https://bi.example/embed',
+    );
+
+    fixture.componentRef.setInput('menuKey', 'powerbi');
+    fixture.detectChanges();
+
+    http
+      .expectOne('http://localhost:8000/dashboards/powerbi')
+      .flush({ name: 'Power BI', embed_url: 'https://pbi.example/embed', definition: null });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(String(el.querySelector('iframe')!.src)).toContain('https://pbi.example/embed');
+    expect(el.textContent).toContain('Power BI');
   });
 
   it('unavailable panel has no management controls (view-only invariant)', () => {

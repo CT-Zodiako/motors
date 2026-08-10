@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output, OnInit, inject, signal, ElementRef, ViewChild, HostListener } from '@angular/core';
+import { Component, EventEmitter, Output, inject, input, signal, effect, ElementRef, ViewChild, HostListener } from '@angular/core';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { HttpErrorResponse } from '@angular/common/http';
 import { DashboardsService, DashboardData } from '../../services/dashboards';
@@ -15,8 +15,11 @@ interface StaleDetail {
   templateUrl: './dashboard-viewer.html',
   styleUrl: './dashboard-viewer.css',
 })
-export class DashboardViewer implements OnInit {
-  @Input() menuKey = 'dashboards';
+export class DashboardViewer {
+  /** Selected dashboard. Signal input + effect: switching dashboard tabs reuses
+   *  this component instance (the parent @if stays truthy), so the fetch must
+   *  react to menuKey changes — ngOnInit would only ever load the first one. */
+  menuKey = input.required<string>();
   @Output() unavailable = new EventEmitter<void>();
 
   @ViewChild('dashboardContainer', { static: true }) dashboardContainer!: ElementRef<HTMLDivElement>;
@@ -33,31 +36,42 @@ export class DashboardViewer implements OnInit {
   nativeData = signal<DashboardData | null>(null);
   isFullscreen = signal(false);
 
-  ngOnInit() {
-    this.dashboards.getByMenuKey(this.menuKey).subscribe({
-      next: (dashboard) => {
-        this.name.set(dashboard.name);
-        if (dashboard.definition == null) {
-          // Embed path: unchanged legacy behavior (sanitized iframe + fullscreen).
-          this.embedUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(dashboard.embed_url ?? ''));
+  constructor() {
+    effect((onCleanup) => {
+      const key = this.menuKey();
+      this.loading.set(true);
+      this.notFound.set(false);
+      this.error.set(false);
+      this.name.set(null);
+      this.embedUrl.set(null);
+      this.nativeData.set(null);
+      this.unavailableMessage.set('Este dashboard ya no está disponible.');
+      const sub = this.dashboards.getByMenuKey(key).subscribe({
+        next: (dashboard) => {
+          this.name.set(dashboard.name);
+          if (dashboard.definition == null) {
+            // Embed path: unchanged legacy behavior (sanitized iframe + fullscreen).
+            this.embedUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(dashboard.embed_url ?? ''));
+            this.loading.set(false);
+          } else {
+            this.loadNativeData(key);
+          }
+        },
+        error: (err: HttpErrorResponse) => {
           this.loading.set(false);
-        } else {
-          this.loadNativeData();
-        }
-      },
-      error: (err: HttpErrorResponse) => {
-        this.loading.set(false);
-        if (err.status === 404) {
-          this.notFound.set(true);
-        } else {
-          this.error.set(true);
-        }
-      },
+          if (err.status === 404) {
+            this.notFound.set(true);
+          } else {
+            this.error.set(true);
+          }
+        },
+      });
+      onCleanup(() => sub.unsubscribe());
     });
   }
 
-  private loadNativeData() {
-    this.dashboards.getData(this.menuKey).subscribe({
+  private loadNativeData(key: string) {
+    this.dashboards.getData(key).subscribe({
       next: (data) => {
         this.nativeData.set(data);
         this.name.set(data.name);
