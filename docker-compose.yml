@@ -1,0 +1,15 @@
+services:
+  backend:
+    build: ./odoo
+    env_file: ./odoo/.env
+    volumes:
+      - ./odoo/bigquery.txt:/app/bigquery.txt:ro
+    restart: unless-stopped
+
+  frontend:
+    build: ./odoo-ui
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

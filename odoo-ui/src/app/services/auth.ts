@@ -1,6 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, tap, catchError, of, map } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface User {
   id: string;
@@ -20,7 +21,7 @@ export interface ChangePasswordPayload {
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private base = 'http://localhost:8000';
+  private base = environment.apiUrl;
   private userSignal = signal<User | null>(null);
   private permissionsSignal = signal<string[]>([]);
   private permissionsLoadedSignal = signal(false);

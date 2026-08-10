@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface BigQueryDataset {
   id: string;
@@ -35,7 +36,7 @@ export interface BigQueryUploadResponse {
 
 @Injectable({ providedIn: 'root' })
 export class BigQueryService {
-  private base = 'http://localhost:8000';
+  private base = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 

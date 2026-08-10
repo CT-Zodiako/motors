@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export interface QueryCategory {
   id: number;
@@ -11,7 +12,7 @@ export interface QueryCategory {
 
 @Injectable({ providedIn: 'root' })
 export class CategoriesService {
-  private base = 'http://localhost:8000';
+  private base = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 

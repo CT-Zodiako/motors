@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
 
 export type ScheduleFrequency = 'hourly' | 'daily' | 'weekly' | 'monthly';
 
@@ -49,7 +50,7 @@ export interface ScheduleRun {
 
 @Injectable({ providedIn: 'root' })
 export class SchedulesService {
-  private base = 'http://localhost:8000';
+  private base = environment.apiUrl;
 
   constructor(private http: HttpClient) {}
 

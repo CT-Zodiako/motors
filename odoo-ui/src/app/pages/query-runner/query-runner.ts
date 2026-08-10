@@ -14,6 +14,7 @@ import { SplitButton } from 'primeng/splitbutton';
 import { Dialog } from 'primeng/dialog';
 import { ProgressSpinner } from 'primeng/progressspinner';
 import { InputTextModule } from 'primeng/inputtext';
+import { environment } from '../../../environments/environment';
 
 
 @Component({
@@ -38,7 +39,7 @@ export class QueryRunner implements OnInit {
   private bq = inject(BigQueryService);
   private schedulesSvc = inject(SchedulesService);
   private msg = inject(MessageService);
-  private apiBase = 'http://localhost:8000';
+  private apiBase = environment.apiUrl;
 
   queries = signal<OdooQuery[]>([]);
   selected = signal<OdooQuery | null>(null);
