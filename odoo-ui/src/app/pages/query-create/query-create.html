@@ -110,17 +110,50 @@
                   <p-button [label]="allFieldsChecked() ? 'Desmarcar todos' : 'Seleccionar todos'" [text]="true" size="small" (onClick)="toggleAllFields()" />
             </div>
 
+            <section class="selected-fields-section" aria-labelledby="selected-fields-title">
+              <div class="selected-fields-header">
+                <h3 id="selected-fields-title">Campos seleccionados</h3>
+                <span class="muted">{{ checkedFieldsList().length }}</span>
+              </div>
+              @if (checkedFieldsList().length === 0) {
+                <div class="selected-fields-empty">
+                  <i class="pi pi-list-check"></i>
+                  <span>No hay campos seleccionados. Elegí al menos un campo de la lista.</span>
+                </div>
+              } @else {
+                <div class="selected-fields-list">
+                  @for (field of checkedFieldsList(); track field.key) {
+                    <div class="selected-field-item">
+                      <div class="selected-field-info">
+                        <span class="selected-field-label">{{ field.string }}</span>
+                        <code class="selected-field-key">{{ field.key }}</code>
+                      </div>
+                      <button
+                        type="button"
+                        class="selected-field-remove"
+                        [attr.aria-label]="'Quitar ' + field.string"
+                        (click)="toggleField(field.key)"
+                      >
+                        <i class="pi pi-times"></i>
+                        <span>Quitar</span>
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+
             <div class="fields-grid">
               @for (f of filteredFields(); track f.key) {
                 <div class="field-card" [class.checked]="isFieldChecked(f.key)" (click)="toggleField(f.key)" [attr.title]="f.help || null">
                   <div class="field-info">
                     <div class="field-title-row">
-                      <span class="field-label">{{ f.string }}</span>
+                      <code class="field-key">{{ f.key }}</code>
                       @if (f.required) {
                         <span class="field-required-badge">Requerido</span>
                       }
                     </div>
-                    <code class="field-key">{{ f.key }}</code>
+                    <span class="field-label" [attr.title]="f.string">{{ f.string }}</span>
                     <span class="field-type">{{ f.type }}@if (f.relation) {<span class="field-relation"> → {{ f.relation }}</span>}</span>
                   </div>
                   @if (isFieldChecked(f.key)) {
@@ -147,108 +180,46 @@
             <p-button label="← Volver" [text]="true" size="small" (onClick)="goTo(1)" />
           </div>
 
-          <div class="filters-list">
-            @for (f of filters(); track $index; let i = $index) {
-              @if (i > 0) {
-                <div class="filter-connector">Y</div>
-              }
-              <div class="filter-row">
-                <p-select
-                  [options]="availableFields()"
-                  [ngModel]="f.field"
-                  (ngModelChange)="onFieldChange(i, $event)"
-                  optionLabel="string"
-                  optionValue="key"
-                  [filter]="true"
-                  filterBy="string,key"
-                  placeholder="Campo..."
-                  styleClass="filter-select"
-                >
-                  <ng-template #selectedItem let-field>
-                    <div class="filter-field-item">
-                      <span>{{ field.string }}</span>
-                      <span class="type-badge">{{ field.type }}</span>
-                    </div>
-                  </ng-template>
-                  <ng-template #item let-field>
-                    <div class="filter-field-item">
-                      <span>{{ field.string }}</span>
-                      <span class="type-badge">{{ field.type }}</span>
-                    </div>
-                  </ng-template>
-                </p-select>
-
-                <p-select
-                  [options]="operatorsFor(f.field)"
-                  [ngModel]="f.operator"
-                  (ngModelChange)="onOperatorChange(i, $event)"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="filter-op"
-                />
-
-                @switch (valueInputKind(f)) {
-                  @case ('bool') {
-                    <p-select
-                      [options]="boolOptions"
-                      [ngModel]="f.value"
-                      (ngModelChange)="updateFilter(i, { value: $event })"
-                      optionLabel="label"
-                      optionValue="value"
-                      placeholder="Elegir..."
-                      styleClass="filter-val"
-                    />
+          @if (domainWarning()) { <div class="domain-warning" role="alert">⚠️ {{ domainWarning() }}</div> }
+              <p class="hint">Organizá los filtros en grupos. Cada grupo combina sus elementos con AND (Y) u OR (O); podés negar cualquier grupo o condición.</p>
+              <ng-template #groupTree let-group>
+                <div class="filter-group" [class.filter-group-negated]="group.negated">
+                  <div class="group-header"><strong>{{ group.negated ? 'NOT (' : '(' }}Grupo</strong>
+                    <p-button label="Y (AND)" [outlined]="group.connector !== 'and'" size="small" (onClick)="setGroupConnector(group.id, 'and')" />
+                    <p-button label="O (OR)" [outlined]="group.connector !== 'or'" size="small" (onClick)="setGroupConnector(group.id, 'or')" />
+                    <p-button [label]="group.negated ? 'Quitar NOT' : 'Negar grupo (NOT)'" [outlined]="true" size="small" (onClick)="toggleGroupNegated(group.id)" />
+                    @if (group.id !== filterTree().id) { <p-button label="Quitar grupo" severity="danger" [text]="true" size="small" (onClick)="removeNode(group.id)" /> }
+                  </div>
+                  <div class="group-children">
+                    @for (node of group.children; track node.id) {
+                      @if (node.type === 'group') { <ng-container *ngTemplateOutlet="groupTree; context: {$implicit: node}"></ng-container> }
+                      @else { <div class="filter-row">
+                        @if (isUnselectedFilterField(node.field)) {
+                             <div class="filter-legacy-warning" role="alert">⚠️ Este filtro usa un campo no seleccionado: <code>{{ node.field }}</code>. Seleccioná el campo en el paso Campos para modificarlo.</div>
+                           }
+                           <p-select [options]="checkedFieldsList()" [ngModel]="node.field" (ngModelChange)="updateCondition(node.id!, { field: $event, operator: defaultOperatorFor($event), value: '' })" optionLabel="key" optionValue="key" [filter]="true" filterBy="key,string" placeholder="Campo..." styleClass="filter-select" />
+                        <p-select [options]="operatorsFor(node.field)" [ngModel]="node.operator" (ngModelChange)="updateCondition(node.id!, { operator: $event, value: '' })" optionLabel="label" optionValue="value" styleClass="filter-op"><ng-template #item let-op><div class="operator-option" [attr.title]="op.help"><span>{{ op.label }}</span><small>{{ op.help }}</small></div></ng-template></p-select>
+                        @switch (valueInputKind($any(node))) {
+                          @case ('bool') { <p-select [options]="boolOptions" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" optionLabel="label" optionValue="value" placeholder="Elegir..." styleClass="filter-val" /> }
+                          @case ('number') { <p-inputnumber [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" [useGrouping]="false" styleClass="filter-val" /> }
+                          @case ('date') { <input type="date" class="filter-val filter-date" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" /> }
+                          @case ('datetime') { <input type="datetime-local" class="filter-val filter-date" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" /> }
+                          @default { <input pInputText class="filter-val" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" [placeholder]="node.operator === 'in' || node.operator === 'not in' || node.operator === 'child_of' || node.operator === 'parent_of' ? 'IDs o valores separados por comas...' : 'Valor...'" /> }
+                        }
+                        <p-button [label]="node.negated ? 'Quitar NOT' : 'NOT'" [outlined]="true" size="small" (onClick)="updateCondition(node.id!, { negated: !node.negated })" /><p-button icon="pi pi-times" severity="danger" [text]="true" (onClick)="removeNode(node.id!)" />
+                      </div> }
+                    }
+                    @if (!group.children.length) { <div class="filters-empty">Grupo vacío. Agregá una condición o un subgrupo.</div> }
+                  </div>
+                  <div class="group-actions"><p-button label="+ Agregar condición" [outlined]="true" [disabled]="checkedFieldsList().length === 0" size="small" (onClick)="addCondition(group.id)" /><p-button label="+ Agregar grupo" [outlined]="true" size="small" (onClick)="addGroup(group.id)" /></div>
+                </div>
+              </ng-template>
+              @if (checkedFieldsList().length === 0) {
+                    <div class="filters-empty filters-no-fields" role="alert">Seleccioná al menos un campo en el paso Campos antes de agregar condiciones.</div>
                   }
-                  @case ('number') {
-                    <p-inputnumber
-                      [ngModel]="$any(f.value)"
-                      (ngModelChange)="updateFilter(i, { value: $event })"
-                      [useGrouping]="false"
-                      styleClass="filter-val"
-                    />
-                  }
-                  @case ('date') {
-                    <input
-                      type="date"
-                      class="filter-val filter-date"
-                      [ngModel]="$any(f.value)"
-                      (ngModelChange)="updateFilter(i, { value: $event })"
-                    />
-                  }
-                  @case ('datetime') {
-                    <input
-                      type="datetime-local"
-                      class="filter-val filter-date"
-                      [ngModel]="$any(f.value)"
-                      (ngModelChange)="updateFilter(i, { value: $event })"
-                    />
-                  }
-                  @default {
-                    <input
-                      pInputText
-                      class="filter-val"
-                      [ngModel]="$any(f.value)"
-                      (ngModelChange)="updateFilter(i, { value: $event })"
-                      [placeholder]="getFieldType(f.field) === 'many2one' ? 'Nombre a buscar...' : 'Valor...'"
-                    />
-                  }
-                }
+                  <ng-container *ngTemplateOutlet="groupTree; context: {$implicit: filterTree()}"></ng-container>
 
-                <p-button icon="pi pi-times" severity="danger" [text]="true" (onClick)="removeFilter(i)" />
-              </div>
-            }
-
-            @if (filters().length === 0) {
-              <div class="filters-empty">
-                <i class="pi pi-filter-slash"></i>
-                <span>Sin filtros — se traen todos los registros.</span>
-              </div>
-            }
-
-            <p-button label="+ Agregar filtro" [outlined]="true" severity="secondary" (onClick)="addFilter()" />
-          </div>
-
-          <div class="step-actions">
+              <div class="step-actions">
             <p-button label="Continuar →" (onClick)="goTo(3)" />
           </div>
         </div>

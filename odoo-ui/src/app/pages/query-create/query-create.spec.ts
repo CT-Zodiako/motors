@@ -335,6 +335,40 @@ describe('QueryCreate (field card metadata)', () => {
     expect(component.allFieldsChecked()).toBe(false);
   });
 
+  it('renders selected fields with remove controls and clearly describes an empty selection', () => {
+    selectModelAndFlushFields();
+
+    let section = fixture.nativeElement.querySelector('.selected-fields-section') as HTMLElement;
+    expect(section).toBeTruthy();
+    expect(section.querySelector('.selected-fields-empty')?.textContent).toContain('No hay campos seleccionados');
+
+    component.toggleField('name');
+    fixture.detectChanges();
+    section = fixture.nativeElement.querySelector('.selected-fields-section') as HTMLElement;
+    expect(section.querySelector('.selected-field-label')?.textContent).toContain('Nombre');
+    const removeButton = section.querySelector('.selected-field-remove') as HTMLButtonElement;
+    expect(removeButton).toBeTruthy();
+    expect(removeButton.getAttribute('aria-label')).toContain('Nombre');
+
+    removeButton.click();
+    fixture.detectChanges();
+    expect(component.checkedFields().has('name')).toBe(false);
+    expect(section.querySelector('.selected-fields-empty')?.textContent).toContain('No hay campos seleccionados');
+  });
+
+  it('selected fields remain the fields sent when saving after removing one', () => {
+    selectModelAndFlushFields();
+    component.queryName.set('test_query');
+    component.toggleField('name');
+    component.toggleField('amount');
+    component.toggleField('name');
+    component.save();
+
+    const req = http.expectOne('http://localhost:8000/queries/');
+    expect(req.request.body.fields).toEqual(['amount']);
+    req.flush({ registered: 'test_query' });
+  });
+
   it('toggleAllFields ignores the field search filter and always toggles all model fields', () => {
     selectModelAndFlushFields();
     component.fieldSearch.set('Cliente');
@@ -408,6 +442,124 @@ describe('QueryCreate (selected model context banner)', () => {
 
     expect(banner()).toBeTruthy();
     expect(banner()!.querySelector('.model-context-code')!.textContent).toContain('sale.order');
+  });
+});
+describe('QueryCreate domain codec', () => {
+  let http: HttpTestingController;
+  let component: QueryCreate;
+  beforeEach(() => { const s = setup(); http = s.http; component = s.component; component.availableFields.set([
+    { key: 'name', string: 'Name', type: 'char' }, { key: 'amount', string: 'Amount', type: 'integer' }, { key: 'when', string: 'When', type: 'datetime' },
+  ]); component.checkedFields.set(new Set(['name', 'amount', 'when'])); });
+  afterEach(() => { http.match(() => true).forEach((r) => { if (r.request.url.includes('/explore/models')) r.flush({ total: 0, models: [] }); else if (r.request.url.includes('/categories/')) r.flush([]); else r.flush({}); }); http.verify(); TestBed.resetTestingModule(); });
+        it('uses selected fields for filter options and defaults new conditions to the first selected field', () => {
+        component.checkedFields.set(new Set(['amount']));
+        component.addCondition();
+        expect((component.filterTree().children[0] as any).field).toBe('amount');
+      });
+      it('does not add a condition when no fields are selected', () => {
+        component.checkedFields.set(new Set());
+        component.addCondition();
+        expect(component.filterTree().children).toEqual([]);
+      });
+      it('warns without changing a stored filter that uses an unselected field', () => {
+        component.checkedFields.set(new Set(['name']));
+        component.filters.set([{ field: 'amount', operator: '>=', value: 10 }]);
+        expect(component.isUnselectedFilterField(component.filters()[0].field)).toBe(true);
+        expect(component.filters()[0]).toEqual({ field: 'amount', operator: '>=', value: 10 });
+      });
+it('exposes every supported operator, including =like and =ilike', () => expect(component.operators.map((op) => op.value)).toEqual(['=', '!=', '=?', '=like', 'like', 'not like', '=ilike', 'ilike', 'not ilike', '>', '>=', '<', '<=', 'in', 'not in', 'child_of', 'parent_of']));
+  it('serializes flat AND/OR/NOT prefix domains', () => { component.filters.set([{ field: 'amount', operator: '>=', value: 10 }, { field: 'name', operator: '=like', value: 'ACME', negated: true }]); expect(component.buildDomain()).toEqual(['&', ['amount', '>=', 10], ['!', ['name', '=like', 'ACME']]]); component.domainMode.set('or'); component.negateDomain.set(true); component.domainEdited = true; expect(component.buildDomain()).toEqual(['!', '|', ['amount', '>=', 10], ['!', ['name', '=like', 'ACME']]]); });
+  it('serializes and parses a single false clause without warning', () => {
+    component.filters.set([{ field: 'name', operator: '=', value: false }]);
+    expect(component.buildDomain()).toEqual([['name', '=', false]]);
+    const parsed = (component as any).parseDomain(['name', '=', false]);
+    expect(component.domainWarning()).toBe('');
+    expect(parsed).toEqual([{ field: 'name', operator: '=', value: false }]);
+  });
+  it('converts numeric comma lists and scalar hierarchy IDs', () => { component.filters.set([{ field: 'amount', operator: 'in', value: '1, 20, -3' }, { field: 'amount', operator: 'child_of', value: '7' }]); expect(component.buildDomain()).toEqual(['&', ['amount', 'in', [1, 20, -3]], ['amount', 'child_of', 7]]); });
+  it('round-trips datetime and negated clauses', () => { const domain = ['&', ['when', '>=', '2024-01-02 03:04:05'], ['!', ['name', 'not ilike', 'x']]]; const filters = (component as any).parseDomain(domain); component.filters.set(filters); component.domainEdited = true; expect(filters).toEqual([{ field: 'when', operator: '>=', value: '2024-01-02T03:04' }, { field: 'name', operator: 'not ilike', value: 'x', negated: true }]); expect(component.buildDomain()).toEqual(['&', ['when', '>=', '2024-01-02 03:04:00'], ['!', ['name', 'not ilike', 'x']]]); });
+  it('preserves unsupported domains after a user edit', () => { const domain = ['|', ['name', '=', 'a'], ['&', ['name', '=', 'b'], ['name', '=', 'c']]]; (component as any).loadedDomain = domain; component.filters.set((component as any).parseDomain(domain)); component.domainEdited = true; expect(component.domainWarning()).toContain('no representable'); expect(component.buildDomain()).toEqual(domain); });
+  it('creates (A OR B) AND C through nested group operations', () => {
+    component.addGroup();
+    const nested = component.filterTree().children[0] as any;
+    component.setGroupConnector(nested.id, 'or');
+    component.addCondition(nested.id);
+    const a = (component.filterTree().children[0] as any).children[0] as any;
+    component.updateCondition(a.id, { field: 'name', operator: '=', value: 'A' });
+    component.addCondition(nested.id);
+    const b = (component.filterTree().children[0] as any).children[1] as any;
+    component.updateCondition(b.id, { field: 'name', operator: '=', value: 'B' });
+    component.addCondition();
+    const c = component.filterTree().children[1] as any;
+    component.updateCondition(c.id, { field: 'name', operator: '=', value: 'C' });
+    expect(component.buildDomain()).toEqual(['&', '|', ['name', '=', 'A'], ['name', '=', 'B'], ['name', '=', 'C']]);
+  });
+  it('creates A OR (B AND C) through group operations with a flat prefix domain', () => {
+    component.addCondition();
+    const a = component.filterTree().children[0] as any;
+    component.updateCondition(a.id, { field: 'name', operator: '=', value: 'A' });
+    component.addGroup();
+    const nested = component.filterTree().children[1] as any;
+    component.setGroupConnector(component.filterTree().id, 'or');
+    component.addCondition(nested.id);
+    const b = (component.filterTree().children[1] as any).children[0] as any;
+    component.updateCondition(b.id, { field: 'name', operator: '=', value: 'B' });
+    component.addCondition(nested.id);
+    const c = (component.filterTree().children[1] as any).children[1] as any;
+    component.updateCondition(c.id, { field: 'name', operator: '=', value: 'C' });
+    expect(component.buildDomain()).toEqual(['|', ['name', '=', 'A'], '&', ['name', '=', 'B'], ['name', '=', 'C']]);
+  });
+  it('applies NOT to a group', () => {
+    component.addGroup();
+    const nested = component.filterTree().children[0] as any;
+    component.addCondition(nested.id);
+    const a = (component.filterTree().children[0] as any).children[0] as any;
+    component.updateCondition(a.id, { field: 'name', operator: '=', value: 'A' });
+    component.addCondition(nested.id);
+    const b = (component.filterTree().children[0] as any).children[1] as any;
+    component.updateCondition(b.id, { field: 'name', operator: '=', value: 'B' });
+    component.toggleGroupNegated(nested.id);
+    expect(component.buildDomain()).toEqual(['!', '&', ['name', '=', 'A'], ['name', '=', 'B']]);
+  });
+  it('removes a nested group and condition without leaving them in the domain', () => {
+    component.addCondition();
+    const a = component.filterTree().children[0] as any;
+    component.updateCondition(a.id, { field: 'name', operator: '=', value: 'A' });
+    component.addGroup();
+    const nested = component.filterTree().children[1] as any;
+    component.addCondition(nested.id);
+    const b = (component.filterTree().children[1] as any).children[0] as any;
+    component.updateCondition(b.id, { field: 'name', operator: '=', value: 'B' });
+    component.removeCondition(b.id);
+    expect(component.buildDomain()).toEqual([['name', '=', 'A']]);
+    component.removeNode(nested.id);
+    expect(component.buildDomain()).toEqual([['name', '=', 'A']]);
+  });
+  it('selecting a new model clears stale tree and domain state', () => {
+    component.selectModel({ name: 'First', model: 'first.model' });
+    http.expectOne((r) => r.url.includes('/explore/fields/first.model')).flush({ fields: { name: { string: 'Name', type: 'char' } } });
+    component.toggleField('name');
+    component.addCondition();
+    const condition = component.filterTree().children[0] as any;
+    component.updateCondition(condition.id, { field: 'name', operator: '=', value: 'stale' });
+    component.selectModel({ name: 'Second', model: 'second.model' });
+    expect(component.filterTree().children).toEqual([]);
+    expect(component.buildDomain()).toEqual([]);
+    expect(component.domainWarning()).toBe('');
+    http.expectOne((r) => r.url.includes('/explore/fields/second.model')).flush({ fields: {} });
+  });
+  it('reset clears stale tree and domain state', () => {
+    component.addCondition();
+    const condition = component.filterTree().children[0] as any;
+    component.updateCondition(condition.id, { field: 'name', operator: '=', value: 'stale' });
+    component.domainMode.set('or');
+    component.negateDomain.set(true);
+    (component as any).reset();
+    expect(component.filterTree().children).toEqual([]);
+    expect(component.filters()).toEqual([]);
+    expect(component.buildDomain()).toEqual([]);
+    expect(component.domainMode()).toBe('and');
+    expect(component.negateDomain()).toBe(false);
   });
 });
 describe('QueryCreate (create mode limit default)', () => {

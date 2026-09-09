@@ -1,4 +1,5 @@
 import { Component, inject, signal, computed, OnInit, Input } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, FieldMeta, OdooQuery } from '../../services/odoo-queries';
 import { CategoriesService, QueryCategory } from '../../services/categories';
@@ -19,9 +20,16 @@ export interface ModelOption {
 }
 export interface FilterRow {
   field: string; operator: string; value: unknown;
+  negated?: boolean;
+  id?: number;
 }
+export interface FilterGroup {
+  type: 'group'; id: number; connector: 'and' | 'or'; negated: boolean;
+  children: Array<FilterRow | FilterGroup>;
+}
+export type FilterNode = FilterRow | FilterGroup;
 export interface OperatorOption {
-  value: string; label: string; forTypes: string[];
+  value: string; label: string; help: string; forTypes: string[];
 }
 
 const PINNED: ModelOption[] = [
@@ -36,19 +44,28 @@ const PINNED: ModelOption[] = [
 ];
 
 const OPERATORS: OperatorOption[] = [
-  { value: '=',         label: 'es igual a',        forTypes: ['all'] },
-  { value: '!=',        label: 'es distinto de',    forTypes: ['all'] },
-  { value: 'ilike',     label: 'contiene',           forTypes: ['char', 'text', 'html', 'many2one'] },
-  { value: 'not ilike', label: 'no contiene',        forTypes: ['char', 'text', 'html', 'many2one'] },
-  { value: '>',         label: 'mayor que',          forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
-  { value: '>=',        label: 'mayor o igual a',   forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
-  { value: '<',         label: 'menor que',          forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
-  { value: '<=',        label: 'menor o igual a',   forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
+  { value: '=', label: 'es igual a', help: 'Valor exacto. Ej.: = 100', forTypes: ['all'] },
+  { value: '!=', label: 'es distinto de', help: 'Excluye el valor exacto. Ej.: != borrador', forTypes: ['all'] },
+  { value: '=?', label: 'igual (si definido)', help: 'Compara solo si no está vacío. Ej.: =? 3', forTypes: ['all'] },
+  { value: '=like', label: 'coincide exactamente (sensible)', help: 'Texto sensible sin comodines implícitos. Ej.: =like ACME', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: 'like', label: 'coincide (sensible)', help: 'Texto sensible a mayúsculas. Ej.: like ACME', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: 'not like', label: 'no coincide (sensible)', help: 'Excluye una coincidencia. Ej.: not like test', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: '=ilike', label: 'coincide exactamente', help: 'Texto sin distinguir mayúsculas y sin comodines implícitos. Ej.: =ilike acme', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: 'ilike', label: 'contiene', help: 'Texto sin distinguir mayúsculas. Ej.: ilike acme', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: 'not ilike', label: 'no contiene', help: 'Excluye texto sin distinguir mayúsculas. Ej.: not ilike test', forTypes: ['char', 'text', 'html', 'many2one'] },
+  { value: '>', label: 'mayor que', help: 'Mayor que el valor. Ej.: > 100', forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
+  { value: '>=', label: 'mayor o igual a', help: 'Mayor o igual. Ej.: >= 100', forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
+  { value: '<', label: 'menor que', help: 'Menor que el valor. Ej.: < 100', forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
+  { value: '<=', label: 'menor o igual a', help: 'Menor o igual. Ej.: <= 100', forTypes: ['integer', 'float', 'monetary', 'date', 'datetime'] },
+  { value: 'in', label: 'está en la lista', help: 'Lista separada por comas. Ej.: in 1, 2, 3', forTypes: ['all'] },
+  { value: 'not in', label: 'no está en la lista', help: 'Excluye una lista. Ej.: not in 1, 2, 3', forTypes: ['all'] },
+  { value: 'child_of', label: 'es hijo de', help: 'ID o IDs padre. Ej.: child_of 7', forTypes: ['many2one', 'integer'] },
+  { value: 'parent_of', label: 'es padre de', help: 'ID o IDs hijo. Ej.: parent_of 7', forTypes: ['many2one', 'integer'] },
 ];
 
 @Component({
   selector: 'app-query-create',
-  imports: [FormsModule, ButtonModule, InputTextModule, SelectModule, StepperModule, CardModule, TagModule, SkeletonModule, InputNumberModule, DialogModule],
+  imports: [CommonModule, FormsModule, ButtonModule, InputTextModule, SelectModule, StepperModule, CardModule, TagModule, SkeletonModule, InputNumberModule, DialogModule],
   templateUrl: './query-create.html',
   styleUrl: './query-create.css',
 })
@@ -100,7 +117,15 @@ export class QueryCreate implements OnInit {
   });
 
   operators = OPERATORS;
-  filters = signal<FilterRow[]>([]);
+  filters = signal<FilterRow[]>([]); // Compatibility projection for existing callers.
+  private nextNodeId = 1;
+  filterTree = signal<FilterGroup>(this.newGroup());
+  domainMode = signal<'and' | 'or'>('and');
+  negateDomain = signal(false);
+  private treeEdited = false;
+  private loadedDomain: unknown[] | null = null;
+  domainEdited = false;
+  domainWarning = signal('');
 
   boolOptions = [
     { label: 'Sí', value: true },
@@ -223,7 +248,11 @@ export class QueryCreate implements OnInit {
         // Pre-check fields from the saved query
         this.checkedFields.set(new Set(q.fields ?? []));
         // Restore filters from domain (inverse of buildDomain)
-        this.filters.set(this.parseDomain(q.domain ?? []));
+        this.loadedDomain = Array.isArray(q.domain) ? structuredClone(q.domain) : [];
+        this.domainEdited = false;
+        const parsed = this.parseTreeDomain(q.domain ?? []);
+            this.filterTree.set(parsed ?? this.newGroup());
+            this.filters.set(this.flattenFilters(this.filterTree()).map(({ id, ...row }) => row));
         this.loadingFields.set(false);
         // Start directly on the fields step in edit mode; model is immutable.
         this.activeStep.set(1);
@@ -235,12 +264,47 @@ export class QueryCreate implements OnInit {
     });
   }
 
-  private parseDomain(domain: unknown[]): FilterRow[] {
-    if (!Array.isArray(domain)) return [];
-    return domain
-      .filter((item): item is [unknown, unknown, unknown] => Array.isArray(item) && item.length === 3)
-      .map(([field, operator, value]) => ({ field: String(field), operator: String(operator), value } as FilterRow));
+  private newGroup(connector: 'and' | 'or' = 'and'): FilterGroup { return { type: 'group', id: this.nextNodeId++, connector, negated: false, children: [] }; }
+
+  private parseClause(raw: unknown): FilterRow | null {
+    let clause = raw; let negated = false;
+    if (Array.isArray(clause) && clause.length === 2 && clause[0] === '!') { negated = true; clause = clause[1]; }
+    if (!Array.isArray(clause) || clause.length !== 3 || typeof clause[0] !== 'string' || typeof clause[1] !== 'string') return null;
+    const value = clause[2];
+    const normalized = this.getFieldType(clause[0]) === 'datetime' && typeof value === 'string' ? value.replace(' ', 'T').replace(/Z$/, '').slice(0, 16) : value;
+    return { id: this.nextNodeId++, field: clause[0], operator: clause[1], value: normalized, ...(negated ? { negated: true } : {}) };
   }
+
+  private parseExpression(tokens: unknown[], at: number): { node: FilterNode; next: number } | null {
+    const token = tokens[at];
+    if (token === '!') { const child = this.parseExpression(tokens, at + 1); if (!child) return null; child.node.negated = !child.node.negated; return child; }
+    if (token === '&' || token === '|') {
+      const left = this.parseExpression(tokens, at + 1); const right = left && this.parseExpression(tokens, left.next);
+      if (!left || !right) return null;
+      const group = this.newGroup(token === '|' ? 'or' : 'and'); group.children = [left.node, right.node]; return { node: group, next: right.next };
+    }
+    const clause = this.parseClause(token); return clause ? { node: clause, next: at + 1 } : null;
+  }
+
+  private parseTreeDomain(domain: unknown[]): FilterGroup | null {
+    this.domainWarning.set('');
+    if (!Array.isArray(domain) || domain.length === 0) return this.newGroup();
+    // Normalize the legacy bare form ['field', '=', value] to one clause.
+    if (domain.length === 3 && typeof domain[0] === 'string' && typeof domain[1] === 'string') {
+      const clause = this.parseClause(domain);
+      if (clause) { const group = this.newGroup(); group.children = [clause]; return group; }
+    }
+    if (!domain.some((x) => x === '&' || x === '|' || x === '!')) {
+      const children = domain.map((x) => this.parseClause(x));
+      if (children.every(Boolean)) { const group = this.newGroup(); group.children = children as FilterRow[]; return group; }
+    }
+    const parsed = this.parseExpression(domain, 0);
+    if (parsed && parsed.next === domain.length) { if ('children' in parsed.node) return parsed.node; const group = this.newGroup(); group.children = [parsed.node]; return group; }
+    this.domainWarning.set('Este dominio usa una estructura no representable visualmente. Se conservará sin cambios para evitar alterarlo.'); return null;
+  }
+
+  private parseDomain(domain: unknown[]): FilterRow[] { const tree = this.parseTreeDomain(domain); return tree ? this.flattenFilters(tree).map(({ id, ...row }) => row) : []; }
+  private flattenFilters(group: FilterGroup): FilterRow[] { return group.children.flatMap(child => 'children' in child ? this.flattenFilters(child) : [child]); }
 
   confirmNewCategory() {
     const name = this.newCategoryName().trim();
@@ -270,9 +334,9 @@ export class QueryCreate implements OnInit {
       : { label: opt.name, model: opt.model, description: opt.model, icon: '🗂️' };
 
     this.selectedModel.set(m);
+    this.resetFilterState();
     this.availableFields.set([]);
     this.checkedFields.set(new Set());
-    this.filters.set([]);
     this.fieldsError.set('');
     this.fieldSearch.set('');
     this.loadingFields.set(true);
@@ -310,30 +374,70 @@ export class QueryCreate implements OnInit {
 
   isFieldChecked(key: string) { return this.checkedFields().has(key); }
 
-  addFilter() {
-    const first = this.availableFields()[0];
-    const op = first ? this.defaultOperatorFor(first.key) : '=';
-    this.filters.update(f => [...f, { field: first?.key ?? '', operator: op, value: '' }]);
+  private markTreeEdited() { this.domainEdited = true; this.treeEdited = true; }
+  private updateGroup(id: number, patch: Partial<FilterGroup>) { const visit = (g: FilterGroup): FilterGroup => g.id === id ? { ...g, ...patch } : { ...g, children: g.children.map(c => 'children' in c ? visit(c) : c) }; this.filterTree.set(visit(this.filterTree())); this.filters.set(this.flattenFilters(this.filterTree())); }
+  private updateGroupChildren(id: number, fn: (children: FilterNode[]) => FilterNode[]) { this.markTreeEdited(); const group = this.findGroup(this.filterTree(), id); if (group) this.updateGroup(id, { children: fn(group.children) }); }
+  private findGroup(group: FilterGroup, id: number): FilterGroup | null { if (group.id === id) return group; for (const child of group.children) if ('children' in child) { const found = this.findGroup(child, id); if (found) return found; } return null; }
+  private updateNode(id: number, fn: (node: FilterNode) => FilterNode) { const visit = (g: FilterGroup): FilterGroup => ({ ...g, children: g.children.map(c => 'children' in c ? visit(c) : c.id === id ? fn(c) as FilterRow : c) }); this.filterTree.set(visit(this.filterTree())); this.filters.set(this.flattenFilters(this.filterTree())); }
+  addCondition(groupId = this.filterTree().id) {
+        const first = this.checkedFieldsList()[0];
+        if (!first) return;
+        this.updateGroupChildren(groupId, children => [...children, { id: this.nextNodeId++, field: first.key, operator: this.defaultOperatorFor(first.key), value: '' }]);
+      }
+      isUnselectedFilterField(fieldKey: string): boolean {
+        return !!fieldKey && !this.checkedFields().has(fieldKey);
+      }
+  addFilter() { this.addCondition(); }
+  addGroup(groupId = this.filterTree().id) { const nested = this.newGroup(); this.updateGroupChildren(groupId, children => [...children, nested]); }
+  addNestedGroup(groupId = this.filterTree().id) { this.addGroup(groupId); }
+  removeCondition(id: number) { this.removeNode(id); }
+  setGroupConnector(id: number, connector: 'and' | 'or') { this.markTreeEdited(); this.updateGroup(id, { connector }); }
+  toggleGroupNegated(id: number) { const group = this.findGroup(this.filterTree(), id); if (group) { this.markTreeEdited(); this.updateGroup(id, { negated: !group.negated }); } }
+  removeNode(id: number) { if (id === this.filterTree().id) return; this.markTreeEdited(); const remove = (g: FilterGroup): FilterGroup => ({ ...g, children: g.children.filter(c => c.id !== id).map(c => 'children' in c ? remove(c) : c) }); this.filterTree.set(remove(this.filterTree())); this.filters.set(this.flattenFilters(this.filterTree())); }
+  removeFilter(i: number) { const row = this.filters()[i]; if (row?.id) this.removeNode(row.id); }
+  updateCondition(id: number, patch: Partial<FilterRow>) { this.markTreeEdited(); this.updateNode(id, n => ({ ...n, ...patch })); }
+  updateFilter(i: number, patch: Partial<FilterRow>) { const row = this.filters()[i]; if (row?.id) this.updateCondition(row.id, patch); else { this.domainEdited = true; this.filters.update(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r)); } }
+  toggleNegated(i: number) { const row = this.filters()[i]; if (row?.id) this.updateCondition(row.id, { negated: !row.negated }); }
+
+  private clause(row: FilterRow): unknown[] {
+    let value: unknown = row.value;
+    if (row.operator === 'in' || row.operator === 'not in' || row.operator === 'child_of' || row.operator === 'parent_of') {
+      const hierarchy = row.operator === 'child_of' || row.operator === 'parent_of';
+      const scalarHierarchy = hierarchy && !Array.isArray(value) && String(value ?? '').trim() !== '';
+      const values = Array.isArray(value) ? value : String(value ?? '').split(',').map(v => v.trim()).filter(Boolean);
+      const numeric = (v: unknown) => /^-?\d+$/.test(String(v));
+      value = scalarHierarchy ? (numeric(value) ? Number(value) : String(value).trim()) : values.map(v => numeric(v) ? Number(v) : v);
+    } else if (typeof value === 'string' && value.includes('T') && this.getFieldType(row.field) === 'datetime') {
+      value = value.replace('T', ' ') + ':00';
+    }
+    const clause: unknown[] = [row.field, row.operator, value];
+    return row.negated ? ['!', clause] : clause;
   }
 
-  removeFilter(i: number) {
-    this.filters.update(f => f.filter((_, idx) => idx !== i));
+  private serializeNode(node: FilterNode): unknown[] {
+    if (!('children' in node)) return this.clause(node);
+    const children = node.children.filter(c => 'children' in c || (c.field && c.value !== '' && c.value !== null && c.value !== undefined));
+    const parts = children
+      .map(c => 'children' in c ? this.serializeNode(c) : [this.clause(c)])
+      .filter(p => p.length);
+    if (!parts.length) return [];
+    const result = parts.length === 1
+      ? parts[0]
+      : [...Array(parts.length - 1).fill(node.connector === 'or' ? '|' : '&'), ...parts.flat()];
+    return node.negated ? ['!', ...result] : result;
   }
-
-  updateFilter(i: number, patch: Partial<FilterRow>) {
-    this.filters.update(rows => rows.map((r, idx) => idx === i ? { ...r, ...patch } : r));
-  }
-
   buildDomain(): unknown[] {
-    return this.filters()
-      .filter(f => f.field && f.value !== '' && f.value !== null && f.value !== undefined)
-      .map(f => {
-        let val = f.value;
-        if (typeof val === 'string' && val.includes('T') && this.getFieldType(f.field) === 'datetime') {
-          val = val.replace('T', ' ') + ':00';
-        }
-        return [f.field, f.operator, val];
-      });
+    if (this.domainWarning() && this.loadedDomain) return structuredClone(this.loadedDomain);
+    if (!this.domainEdited && this.loadedDomain) return structuredClone(this.loadedDomain);
+    if (this.treeEdited) {
+      const serialized = this.serializeNode(this.filterTree());
+      return serialized.length === 3 && !['!', '&', '|'].includes(String(serialized[0])) ? [serialized] : serialized;
+    }
+    const clauses = this.filters().filter(f => f.field && f.value !== '' && f.value !== null && f.value !== undefined).map(f => this.clause(f));
+    if (!clauses.length) return [];
+    const connector = this.domainMode() === 'or' ? '|' : '&';
+    const result: unknown[] = clauses.length === 1 ? [clauses[0]] : [...Array(clauses.length - 1).fill(connector), ...clauses];
+    return this.negateDomain() ? ['!', ...result] : result;
   }
 
   autoName(): string {
@@ -434,9 +538,21 @@ export class QueryCreate implements OnInit {
     this._doSaveEdit();
   }
 
+  private resetFilterState() {
+    this.filterTree.set(this.newGroup());
+    this.filters.set([]);
+    this.treeEdited = false;
+    this.domainEdited = false;
+    this.loadedDomain = null;
+    this.domainWarning.set('');
+    this.domainMode.set('and');
+    this.negateDomain.set(false);
+  }
+
   private reset() {
     this.activeStep.set(0);
     this.selectedModel.set(null);
+    this.resetFilterState();
     this.availableFields.set([]);
     this.checkedFields.set(new Set());
     this.filters.set([]);

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Any
 
 from auth import require_permission
 from config_store import get_store, ConflictError, NotFoundError, ValidationError
@@ -8,13 +9,70 @@ from routers.categories import category_exists, general_category_id
 
 router = APIRouter(prefix="/queries", tags=["catalog"])
 
+DOMAIN_OPERATORS = {"=", "!=", ">", ">=", "<", "<=", "=?", "=like", "like", "not like", "=ilike", "ilike", "not ilike", "in", "not in", "child_of", "parent_of"}
+DOMAIN_CONNECTORS = {"&", "|", "!"}
+LIST_OPERATORS = {"in", "not in"}
+HIERARCHY_OPERATORS = {"child_of", "parent_of"}
+
+
+def _validate_query_domain(domain: Any) -> None:
+    """Validate prefix notation without rewriting a valid Odoo domain."""
+    if not isinstance(domain, list):
+        raise HTTPException(status_code=400, detail="domain must be a list")
+    if not domain:
+        return
+
+    def expression(index: int) -> int:
+        if index >= len(domain):
+            raise ValueError("missing expression after connector")
+        token = domain[index]
+        if isinstance(token, str):
+            if token not in DOMAIN_CONNECTORS:
+                raise ValueError(f"unknown domain connector '{token}'")
+            index += 1
+            for _ in range(1 if token == "!" else 2):
+                index = expression(index)
+            return index
+        if not isinstance(token, (list, tuple)) or len(token) != 3:
+            raise ValueError("each domain clause must be [field, operator, value]")
+        field, operator, value = token
+        if not isinstance(field, str) or not field:
+            raise ValueError("domain clause field must be a non-empty string")
+        if not isinstance(operator, str) or operator not in DOMAIN_OPERATORS:
+            raise ValueError(f"unknown domain operator '{operator}'")
+        if operator in LIST_OPERATORS:
+            if not isinstance(value, list) or not value:
+                raise ValueError(f"operator '{operator}' requires a non-empty list value")
+            if any(isinstance(item, bool) or not isinstance(item, (int, str)) or (isinstance(item, str) and not item.strip()) for item in value):
+                raise ValueError(f"operator '{operator}' list values must be non-empty strings or integers")
+        if operator in HIERARCHY_OPERATORS:
+            if isinstance(value, bool) or not isinstance(value, (int, str, list)):
+                raise ValueError(f"operator '{operator}' requires a scalar or non-empty list value")
+            if isinstance(value, str) and not value.strip():
+                raise ValueError(f"operator '{operator}' requires a scalar or non-empty list value")
+            if isinstance(value, list) and (
+                not value or any(
+                    isinstance(item, bool) or not isinstance(item, (int, str))
+                    or (isinstance(item, str) and not item.strip()) for item in value
+                )
+            ):
+                raise ValueError(f"operator '{operator}' requires a scalar or non-empty list value")
+        return index + 1
+
+    try:
+        index = expression(0)
+        if index != len(domain):
+            raise ValueError("domain must contain one flat prefix expression")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid domain: {exc}") from exc
+
 
 class QueryIn(BaseModel):
     name: str
     description: str = ""
     model: str
     method: str = "search_read"
-    domain: list = []
+    domain: Any = []
     fields: list = []
     limit_val: int = 100
     category_id: int | None = None
@@ -39,6 +97,7 @@ def get_query(name: str, user: dict = Depends(require_permission("menu.consultar
 
 @router.post("/", status_code=201)
 def register_query(body: QueryIn, user: dict = Depends(require_permission("menu.cargar.create"))):
+    _validate_query_domain(body.domain)
     # Category validation: provided id must exist; omitted means General on INSERT only.
     if body.category_id is not None and not category_exists(body.category_id):
         raise HTTPException(
@@ -70,7 +129,7 @@ def register_query(body: QueryIn, user: dict = Depends(require_permission("menu.
 
 class QueryPatchIn(BaseModel):
     description: str | None = None
-    domain: list | None = None
+    domain: Any = None
     fields: list | None = None
     limit_val: int | None = None
     category_id: int | None = None
@@ -121,6 +180,8 @@ def update_query(name: str, body: QueryPatchIn, user: dict = Depends(require_per
             )
 
     # Validation
+    if body.domain is not None:
+        _validate_query_domain(body.domain)
     if body.fields is not None and len(body.fields) == 0:
         raise HTTPException(status_code=400, detail="fields must be a non-empty list")
     if body.domain is not None and not isinstance(body.domain, list):
