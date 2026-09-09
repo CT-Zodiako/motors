@@ -102,6 +102,47 @@ def test_fetch_query_rows_negative_limit_is_false(fake_odoo):
 
 # ── Schedule executor path uses the same helper ──
 
+def test_runner_final_page_reports_exact_total_and_uses_offset_page_size(monkeypatch):
+    from routers.runner import run_query
+
+    query = {
+        "model": "account.move",
+        "method": "search_read",
+        "domain": [],
+        "fields": ["id"],
+        "limit_val": None,
+        "active": True,
+    }
+    monkeypatch.setattr(runner, "_fetch_registered", lambda name: query)
+    calls = []
+
+    def fetch(registered, offset, limit):
+        calls.append((offset, limit))
+        return [{"id": 102743}, {"id": 102744}]
+
+    monkeypatch.setattr(runner, "fetch_query_rows", fetch)
+    result = run_query("LineasFacturasEmitidas", offset=102742, page_size=20, user={})
+
+    assert calls == [(102742, 21)]
+    assert result["data"] == [{"id": 102743}, {"id": 102744}]
+    assert result["has_more"] is False
+    assert result["total"] == 102744
+    assert result["total_known"] is True
+
+
+def test_runner_stored_limit_is_only_upper_bound_while_more(monkeypatch):
+    from routers.runner import run_query
+
+    query = {"model": "x", "method": "search_read", "domain": [], "fields": [], "limit_val": 100, "active": True}
+    monkeypatch.setattr(runner, "_fetch_registered", lambda name: query)
+    monkeypatch.setattr(runner, "fetch_query_rows", lambda *args, **kwargs: [{"id": i} for i in range(21)])
+
+    result = run_query("q", offset=0, page_size=20, user={})
+    assert result["has_more"] is True
+    assert result["total"] == 100
+    assert result["total_known"] is False
+
+
 def test_schedule_executor_routes_through_fetch_query_rows(fake_odoo, monkeypatch):
     """After WU3, schedules.py must call fetch_query_rows instead of inline odoo_execute."""
     from routers import schedules, runner

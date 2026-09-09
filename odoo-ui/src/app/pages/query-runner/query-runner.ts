@@ -7,7 +7,7 @@ import { SchedulesService, ScheduleFrequency, ScheduleCreatePayload } from '../.
 import { InputNumber } from 'primeng/inputnumber';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
-import { TableModule, type Table } from 'primeng/table';
+import { TableModule, type Table, type TableLazyLoadEvent } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { MessageService } from 'primeng/api';
 import { SplitButton } from 'primeng/splitbutton';
@@ -44,6 +44,8 @@ export class QueryRunner implements OnInit {
   queries = signal<OdooQuery[]>([]);
   selected = signal<OdooQuery | null>(null);
   running = signal(false);
+  private initialPageLoaded = false;
+    readonly pageSize = signal(20);
   result = signal<QueryResult | null>(null);
   checkedColumns = signal<Set<string>>(new Set());
 
@@ -142,6 +144,15 @@ export class QueryRunner implements OnInit {
     this.allColumns().filter(c => this.checkedColumns().has(c))
   );
 
+  displayRows = computed(() => {
+    const filters = this.columnFilters();
+    return (this.result()?.data ?? []).filter(row =>
+      Object.entries(filters).every(([col, value]) =>
+        !value || this.cellValue(row, col).toLowerCase().includes(value.toLowerCase())
+      )
+    );
+  });
+
   allChecked = computed(() =>
     this.allColumns().length > 0 &&
     this.allColumns().every(c => this.checkedColumns().has(c))
@@ -174,10 +185,12 @@ export class QueryRunner implements OnInit {
     if (!q) return;
     this.running.set(true);
     this.result.set(null);
+    this.initialPageLoaded = true;
     this.checkedColumns.set(new Set());
     this.columnFilters.set({});
 
-    this.svc.run(q.name).subscribe({
+    // Keep the initial request aligned with the PrimeNG table page size.
+    this.svc.run(q.name, 0, this.pageSize()).subscribe({
       next: (res) => {
         this.result.set(res);
         this.running.set(false);
@@ -187,6 +200,39 @@ export class QueryRunner implements OnInit {
       error: () => {
         this.msg.add({ severity: 'error', summary: 'Error', detail: 'Error al ejecutar el query' });
         this.running.set(false);
+      },
+    });
+  }
+
+  onLazyLoad(event: TableLazyLoadEvent) {
+    // PrimeNG emits the selected page size with every lazy event. Keep the
+    // table and subsequent requests aligned when the user changes it.
+    if (event.rows && event.rows !== this.pageSize()) {
+      this.pageSize.set(event.rows);
+    }
+    if ((event.first ?? 0) === 0 && (this.initialPageLoaded || this.result()?.offset === 0)) {
+      // The initial page is requested explicitly; ignore PrimeNG's duplicate
+      // lazy event while that page is already displayed.
+      this.initialPageLoaded = false;
+      return;
+    }
+    if ((event.first ?? 0) === 0 && this.result()?.offset === undefined) return;
+    const q = this.selected();
+    if (!q || this.running()) return;
+    const offset = event.first ?? 0;
+    const pageSize = this.pageSize();
+    this.running.set(true);
+    this.svc.run(q.name, offset, pageSize).subscribe({
+      next: (res) => {
+        this.result.set(res);
+        this.running.set(false);
+        if (this.checkedColumns().size === 0 && res.data.length > 0) {
+          this.checkedColumns.set(new Set(Object.keys(res.data[0])));
+        }
+      },
+      error: () => {
+        this.running.set(false);
+        this.msg.add({ severity: 'error', summary: 'Error', detail: 'Error al cargar la página' });
       },
     });
   }
@@ -412,16 +458,8 @@ export class QueryRunner implements OnInit {
       return;
     }
 
-    const rows = result.data.map((row) => {
-      const filtered: Record<string, unknown> = {};
-      for (const col of cols) {
-        filtered[col] = this._exportableValue(row[col]);
-      }
-      return filtered;
-    });
-
     this.bigQuerySubmitting.set(true);
-    this.bq.uploadToBigQuery(dataset.id, tableName, rows, q.name).subscribe({
+    this.svc.loadQueryToBigQuery(dataset.id, tableName, q.name).subscribe({
       next: (res) => {
         this.bigQuerySubmitting.set(false);
         this.msg.add({

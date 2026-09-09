@@ -109,7 +109,13 @@ describe('QueryRunner (visual column filters)', () => {
   function runQuery() {
     component.selected.set(ROWS[0]);
     component.run();
-    http.expectOne('http://localhost:8000/run/ventas_hoy').flush(RUN_RESULT);
+    http.expectOne('http://localhost:8000/run/ventas_hoy?offset=0&page_size=20').flush({
+          ...RUN_RESULT,
+          offset: 0,
+          page_size: 20,
+          has_more: true,
+          total_known: false,
+        });
     fixture.detectChanges();
   }
 
@@ -126,7 +132,51 @@ describe('QueryRunner (visual column filters)', () => {
     await fixture.whenStable();
   };
 
-  it('stores each column filter and applies a contains filter to the table', () => {
+  it('requests the configured PrimeNG page size on initial execution', () => {
+        component.selected.set(ROWS[0]);
+        component.run();
+        const req = http.expectOne('http://localhost:8000/run/ventas_hoy?offset=0&page_size=20');
+        expect(req.request.method).toBe('GET');
+        req.flush({ ...RUN_RESULT, offset: 0, page_size: 20, has_more: true, total_known: false });
+        expect(component.result()!.data).toHaveLength(3);
+      });
+
+      it('requests the selected lazy page and retains only that page', () => {
+        component.selected.set(ROWS[0]);
+        component.result.set({ ...RUN_RESULT, offset: 0, page_size: 20, has_more: true, total_known: false });
+        component.checkedColumns.set(new Set(['id', 'name', 'city']));
+        component.onLazyLoad({ first: 40, rows: 20 });
+        const req = http.expectOne('http://localhost:8000/run/ventas_hoy?offset=40&page_size=20');
+        req.flush({ ...RUN_RESULT, data: [{ id: 41, name: 'Dora', city: 'Salto' }], offset: 40, page_size: 20, total: 102744, has_more: true, total_known: false });
+        expect(component.result()!.offset).toBe(40);
+        expect(component.result()!.data).toEqual([{ id: 41, name: 'Dora', city: 'Salto' }]);
+      });
+
+      it('keeps a changed PrimeNG page size for subsequent lazy loads', () => {
+            component.selected.set(ROWS[0]);
+            component.result.set({ ...RUN_RESULT, offset: 0, page_size: 20, has_more: true, total_known: false });
+
+            // The first event after changing the paginator is the duplicate
+            // offset-zero event; it must still update the component page size.
+            component.onLazyLoad({ first: 0, rows: 50 });
+            expect(component.pageSize()).toBe(50);
+
+            component.onLazyLoad({ first: 50, rows: 50 });
+            const req = http.expectOne('http://localhost:8000/run/ventas_hoy?offset=50&page_size=50');
+            req.flush({ ...RUN_RESULT, offset: 50, page_size: 50, total: 103, has_more: true, total_known: false });
+            expect(component.result()!.page_size).toBe(50);
+          });
+
+          it('preserves backend pagination metadata for a final page', () => {
+        component.selected.set(ROWS[0]);
+        component.onLazyLoad({ first: 102740, rows: 20 });
+        const req = http.expectOne('http://localhost:8000/run/ventas_hoy?offset=102740&page_size=20');
+        req.flush({ query: 'ventas_hoy', data: [{ id: 102744 }], offset: 102740, page_size: 20, returned: 1, total: 102741, has_more: false, total_known: true });
+        expect(component.result()!.has_more).toBe(false);
+        expect(component.result()!.total).toBe(102741);
+      });
+
+      it('stores each column filter and applies a contains filter to the table', () => {
     const dt = fakeTable();
     component.onColumnFilter(dt, 'name', 'an');
     component.onColumnFilter(dt, 'city', 'monte');
@@ -208,7 +258,7 @@ describe('QueryRunner (visual column filters)', () => {
     expect(fixture.nativeElement.querySelector('.table-toolbar button')).toBeNull();
   });
 
-  it('BigQuery upload always sends the full result set, ignoring visual filters', () => {
+  it('BigQuery upload delegates the full query to the backend, ignoring visual filters', () => {
     runQuery();
     // A filter that matches nothing must not shrink the upload payload.
     component.columnFilters.set({ name: 'zzz-no-match' });
@@ -219,9 +269,10 @@ describe('QueryRunner (visual column filters)', () => {
     component.confirmBigQueryUpload();
 
     const req = http.expectOne((r) =>
-      r.url.startsWith('http://localhost:8000/bigquery/upload/ds/tbl')
+      r.url.startsWith('http://localhost:8000/bigquery/upload-query/ds/tbl')
     );
-    expect((req.request.body as { rows: unknown[] }).rows).toEqual(RUN_RESULT.data);
+    expect(req.request.body).toEqual({});
+    expect(req.request.urlWithParams).toContain('query_name=ventas_hoy');
     req.flush({ dataset_id: 'ds', table_id: 'tbl', rows_loaded: 3 });
   });
 });

@@ -51,7 +51,15 @@
       <div class="result-bar">
         <div class="result-meta">
           <span class="result-name">{{ result()!.query }}</span>
-          <p-tag [value]="result()!.total + ' registros'" severity="info" />
+          <p-tag
+                [value]="result()!.total_known ? (result()!.total + ' registros exactos') : ('Más de ' + result()!.total + ' registros')"
+                severity="info"
+              />
+              @if (result()!.total_source === 'count_error') {
+                <p-tag value="Total no disponible" severity="warn" />
+              } @else if (result()!.total_source === 'unknown') {
+                <p-tag value="Total estimado" severity="secondary" />
+              }
           <p-tag [value]="activeColumns().length + ' / ' + allColumns().length + ' cols'" severity="secondary" />
         </div>
         <p-splitbutton
@@ -307,7 +315,7 @@
         <div class="table-toolbar">
           <span class="table-toolbar-hint">
             <i class="pi pi-filter"></i>
-            Filtros visuales por columna — no afectan la exportación ni el envío a BigQuery
+            Página de resultados (el total exacto se obtiene con search_count cuando está disponible) — filtros visuales por columna
           </span>
           @if (hasActiveFilters()) {
             <p-button
@@ -321,9 +329,12 @@
         </div>
         <p-table
           #dt
-          [value]="result()!.data"
+          [value]="displayRows()"
+          [lazy]="true"
+          (onLazyLoad)="onLazyLoad($event)"
+          [totalRecords]="result()!.total"
           [paginator]="true"
-          [rows]="20"
+          [rows]="pageSize()"
           [rowsPerPageOptions]="[20, 50, 100]"
           [scrollable]="true"
           styleClass="p-datatable-striped p-datatable-gridlines p-datatable-sm"

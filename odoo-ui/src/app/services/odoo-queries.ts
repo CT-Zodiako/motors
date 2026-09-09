@@ -27,6 +27,13 @@ export interface QueryResult {
   query: string;
   total: number;
   data: Record<string, unknown>[];
+  offset?: number;
+  page_size?: number;
+  returned?: number;
+  has_more?: boolean;
+  total_known?: boolean;
+  total_source?: 'search_count' | 'sentinel' | 'unknown' | 'count_error';
+  total_error?: string | null;
 }
 
 export interface QueryDestination {
@@ -93,8 +100,17 @@ export class OdooQueriesService {
     return this.http.patch<{ query: OdooQuery; propagation?: any }>(`${this.base}/queries/${encodeURIComponent(name)}`, payload);
   }
 
-  run(name: string): Observable<QueryResult> {
-    return this.http.get<QueryResult>(`${this.base}/run/${name}`);
+  run(name: string, offset?: number, pageSize?: number): Observable<QueryResult> {
+    let url = `${this.base}/run/${encodeURIComponent(name)}`;
+    if (offset !== undefined && pageSize !== undefined) {
+      url += `?offset=${offset}&page_size=${pageSize}`;
+    }
+    return this.http.get<QueryResult>(url);
+  }
+
+  loadQueryToBigQuery(datasetId: string, tableId: string, queryName: string): Observable<{ dataset_id: string; table_id: string; rows_loaded: number }> {
+    const url = `${this.base}/bigquery/upload-query/${datasetId}/${tableId}?query_name=${encodeURIComponent(queryName)}`;
+    return this.http.post<{ dataset_id: string; table_id: string; rows_loaded: number }>(url, {});
   }
 
   getDestination(queryName: string): Observable<QueryDestination | null> {

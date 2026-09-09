@@ -9,6 +9,7 @@ from google.cloud.bigquery import LoadJobConfig, SchemaField, WriteDisposition
 from auth import require_permission
 
 MAX_UPLOAD_ROWS = 100_000
+BQ_QUERY_CHUNK_SIZE = 5_000
 
 from bigquery_client import get_bigquery_client
 
@@ -120,17 +121,39 @@ def _infer_bq_schema(rows: list[dict[str, Any]]) -> list[SchemaField]:
 
 def _infer_column_type(key: str, rows: list[dict[str, Any]]) -> str:
     """Infer a BigQuery type by scanning all non-None values in a column."""
-    inferred = "STRING"  # default when all values are None
+    inferred: str | None = None
     for row in rows:
         value = row.get(key)
         if value is None:
             continue
         value_type = _infer_field_type(value)
-        inferred = _promote_bq_type(inferred, value_type)
+        inferred = value_type if inferred is None else _promote_bq_type(inferred, value_type)
         # STRING is the most permissive; no need to keep scanning.
         if inferred == "STRING":
             break
-    return inferred
+    return inferred or "STRING"
+
+
+def _validate_chunk_schema(rows: list[dict[str, Any]], schema: list[SchemaField]) -> None:
+    """Reject later chunks that would be silently omitted or type-incompatible."""
+    schema_names = {field.name for field in schema}
+    chunk_names = {key for row in rows for key in row}
+    extra = chunk_names - schema_names
+    if extra:
+        raise ValueError(
+            "Query result schema changed: later chunk contains new columns "
+            + ", ".join(sorted(extra))
+        )
+    for field in schema:
+        values = [row.get(field.name) for row in rows if row.get(field.name) is not None]
+        if not values:
+            continue
+        chunk_type = _infer_column_type(field.name, rows)
+        if chunk_type != field.field_type:
+            raise ValueError(
+                f"Query result schema changed: column {field.name!r} "
+                f"changed from {field.field_type} to {chunk_type}"
+            )
 
 
 def _infer_field_type(value: Any) -> str:
@@ -169,11 +192,11 @@ def _infer_string_type(value: str) -> str:
     return "STRING"
 
 
-def load_rows_to_bigquery(client, dataset_id, table_id, rows, schema):
-    """Core BigQuery load: WRITE_TRUNCATE with inferred schema. Returns rows_loaded."""
+def load_rows_to_bigquery(client, dataset_id, table_id, rows, schema, write_disposition=WriteDisposition.WRITE_TRUNCATE):
+    """Load one JSON chunk into BigQuery and return the resulting table count."""
     table_ref = f"{client.project}.{dataset_id}.{table_id}"
     job_config = LoadJobConfig(
-        write_disposition=WriteDisposition.WRITE_TRUNCATE,
+        write_disposition=write_disposition,
         schema=schema,
         source_format="NEWLINE_DELIMITED_JSON",
     )
@@ -181,6 +204,79 @@ def load_rows_to_bigquery(client, dataset_id, table_id, rows, schema):
     job.result()
     table = client.get_table(table_ref)
     return table.num_rows
+
+
+def load_query_to_bigquery(query: dict, dataset_id: str, table_id: str, chunk_size: int = BQ_QUERY_CHUNK_SIZE) -> int:
+    """Stream a stored Odoo query into BigQuery in bounded chunks.
+
+    The first successful chunk truncates the destination; later chunks append.
+    A failed append raises, deliberately leaving the partial table visible rather
+    than reporting success. Empty queries do not truncate an existing table.
+    """
+    from routers.runner import fetch_query_rows
+
+    client = get_bigquery_client()
+    offset = 0
+    total = 0
+    schema = None
+    while True:
+        rows = fetch_query_rows(query, offset=offset, limit=chunk_size)
+        if not rows:
+            if total == 0:
+                raise ValueError("Query returned no rows; destination was not truncated")
+            return total
+        normalized = []
+        for row in rows:
+            normalized.append({k: _exportable_value(row.get(k)) for k in row} if schema is None else {
+                f.name: _exportable_value(row.get(f.name)) for f in schema
+            })
+        if schema is None:
+            schema = _infer_bq_schema(normalized)
+            if not schema:
+                raise ValueError("Could not infer schema from query rows")
+        else:
+            _validate_chunk_schema(rows, schema)
+        load_rows_to_bigquery(
+            client, dataset_id, table_id, normalized, schema,
+            WriteDisposition.WRITE_TRUNCATE if total == 0 else WriteDisposition.WRITE_APPEND,
+        )
+        total += len(rows)
+        offset += len(rows)
+        if len(rows) < chunk_size:
+            return total
+
+
+def _exportable_value(value: Any) -> Any:
+    if isinstance(value, (list, dict)):
+        import json
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+@router.post("/upload-query/{dataset_id}/{table_id}", response_model=BigQueryUploadResponse)
+def upload_query_to_bigquery(
+    dataset_id: str,
+    table_id: str,
+    query_name: str,
+    origin: str = "manual",
+    user: dict = Depends(require_permission("menu.consultar.programar")),
+):
+    _validate_identifier(dataset_id, "dataset")
+    _validate_identifier(table_id, "table")
+    from routers.runner import _fetch_registered
+    query = _fetch_registered(query_name)
+    if not query:
+        raise HTTPException(status_code=404, detail=f"Query '{query_name}' not found or inactive")
+    try:
+        rows_loaded = load_query_to_bigquery(query, dataset_id, table_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load query to BigQuery: {e}")
+    try:
+        from query_registry import upsert_destination
+        upsert_destination(query_name, dataset_id, table_id, origin)
+    except Exception:
+        pass
+    return BigQueryUploadResponse(dataset_id=dataset_id, table_id=table_id, rows_loaded=rows_loaded)
 
 
 @router.post("/upload/{dataset_id}/{table_id}", response_model=BigQueryUploadResponse)

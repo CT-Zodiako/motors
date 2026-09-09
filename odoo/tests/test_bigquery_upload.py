@@ -53,3 +53,52 @@ def test_upload_truncates_and_passes_schema(fake_client):
     # Schema is now union of ALL rows (post-refactor)
     schema_fields = [f.name for f in job_config.schema]
     assert schema_fields == ["a", "b", "c"]  # union includes 'c' from row 1
+
+
+def test_load_query_chunks_over_100k_truncate_then_append_and_preserves_schema(fake_client, monkeypatch):
+    from routers import bigquery
+
+    total_rows = 100_001
+    def fetch_chunk(_query, offset, limit):
+        if offset >= total_rows:
+            return []
+        count = min(limit, total_rows - offset)
+        return [{"id": offset + i, "name": "row"} for i in range(count)]
+
+    monkeypatch.setattr(bigquery, "get_bigquery_client", lambda: fake_client)
+    from routers import runner
+    monkeypatch.setattr(runner, "fetch_query_rows", fetch_chunk)
+
+    loaded = bigquery.load_query_to_bigquery({"model": "x", "method": "search_read"}, "ds", "tbl", chunk_size=5000)
+
+    assert loaded == total_rows
+    assert len(fake_client._loads) == 21
+    assert fake_client._loads[0][2].write_disposition == "WRITE_TRUNCATE"
+    assert all(c[2].write_disposition == "WRITE_APPEND" for c in fake_client._loads[1:])
+    assert all([f.name for f in c[2].schema] == ["id", "name"] for c in fake_client._loads)
+
+
+def test_load_query_rejects_incompatible_types_in_later_chunk(fake_client, monkeypatch):
+    from routers import bigquery
+
+    chunks = iter([[{"id": 1}], [{"id": "not-an-integer"}]])
+    monkeypatch.setattr(bigquery, "get_bigquery_client", lambda: fake_client)
+    from routers import runner
+    monkeypatch.setattr(runner, "fetch_query_rows", lambda *args, **kwargs: next(chunks))
+
+    with pytest.raises(ValueError, match="schema changed.*id.*INTEGER.*STRING"):
+        bigquery.load_query_to_bigquery({"model": "x", "method": "search_read"}, "ds", "tbl", chunk_size=1)
+    assert len(fake_client._loads) == 1
+
+
+def test_load_query_rejects_new_columns_in_later_chunk(fake_client, monkeypatch):
+    from routers import bigquery
+
+    chunks = iter([[{"id": 1}], [{"id": 2, "new_column": "not dropped"}]])
+    monkeypatch.setattr(bigquery, "get_bigquery_client", lambda: fake_client)
+    from routers import runner
+    monkeypatch.setattr(runner, "fetch_query_rows", lambda *args, **kwargs: next(chunks))
+
+    with pytest.raises(ValueError, match="schema changed.*new_column"):
+        bigquery.load_query_to_bigquery({"model": "x", "method": "search_read"}, "ds", "tbl", chunk_size=1)
+    assert len(fake_client._loads) == 1

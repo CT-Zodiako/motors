@@ -73,10 +73,7 @@ def test_single_row_parity():
     rows = [{"a": 1, "b": "x"}]
     schema = _infer_bq_schema(rows)
     assert [f.name for f in schema] == ["a", "b"]
-    # NOTE: _infer_column_type starts with STRING default and promotes; with a single row
-    # the first non-None value promotes from STRING but _promote_bq_type(STRING, INTEGER) = STRING.
-    # This is pre-existing repo behavior; the union-inference change (D5) only fixes key coverage.
-    assert schema[0].field_type == "STRING"
+    assert schema[0].field_type == "INTEGER"
     assert schema[1].field_type == "STRING"
 
 

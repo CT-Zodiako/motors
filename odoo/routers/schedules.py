@@ -7,7 +7,7 @@ from auth import require_permission
 from config_store import get_store
 from query_registry import mark_other_destinations_stale, upsert_destination
 from routers.runner import _fetch_registered, fetch_query_rows
-from routers.bigquery import upload_to_bigquery, BigQueryUploadPayload
+from routers.bigquery import load_query_to_bigquery
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -254,33 +254,18 @@ def _execute_schedule(schedule: dict):
 
     try:
         registered = _fetch_registered(schedule["query_name"])
-        data = fetch_query_rows(registered)
-
-        # Exportable value normalization (same as frontend)
-        def _exportable_value(val):
-            if val is None:
-                return None
-            if isinstance(val, (list, dict)):
-                import json
-                return json.dumps(val, ensure_ascii=False)
-            return val
-
-        rows = [{k: _exportable_value(v) for k, v in row.items()} for row in data]
-
-        result = upload_to_bigquery(
-            schedule["dataset_id"],
-            schedule["table_id"],
-            BigQueryUploadPayload(rows=rows),
-            query_name=schedule["query_name"],
-            origin="schedule",
-        )
+        rows_loaded = load_query_to_bigquery(registered, schedule["dataset_id"], schedule["table_id"])
+        try:
+            upsert_destination(schedule["query_name"], schedule["dataset_id"], schedule["table_id"], origin="schedule")
+        except Exception:
+            pass
 
         store.finish_run(run_id, {
             "status": "success",
-            "message": f"Loaded {result.rows_loaded} rows into {schedule['dataset_id']}.{schedule['table_id']}",
-            "rows_loaded": result.rows_loaded,
+            "message": f"Loaded {rows_loaded} rows into {schedule['dataset_id']}.{schedule['table_id']}",
+            "rows_loaded": rows_loaded,
         })
-        return {"status": "success", "rows_loaded": result.rows_loaded}
+        return {"status": "success", "rows_loaded": rows_loaded}
 
     except Exception as e:
         store.finish_run(run_id, {
