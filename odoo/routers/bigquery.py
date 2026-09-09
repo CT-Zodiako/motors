@@ -149,7 +149,7 @@ def _validate_chunk_schema(rows: list[dict[str, Any]], schema: list[SchemaField]
         if not values:
             continue
         chunk_type = _infer_column_type(field.name, rows)
-        if chunk_type != field.field_type:
+        if field.field_type != "STRING" and chunk_type != field.field_type:
             raise ValueError(
                 f"Query result schema changed: column {field.name!r} "
                 f"changed from {field.field_type} to {chunk_type}"
@@ -228,7 +228,7 @@ def load_query_to_bigquery(query: dict, dataset_id: str, table_id: str, chunk_si
         normalized = []
         for row in rows:
             normalized.append({k: _exportable_value(row.get(k)) for k in row} if schema is None else {
-                f.name: _exportable_value(row.get(f.name)) for f in schema
+                f.name: _exportable_value(row.get(f.name), f.field_type) for f in schema
             })
         if schema is None:
             schema = _infer_bq_schema(normalized)
@@ -246,10 +246,12 @@ def load_query_to_bigquery(query: dict, dataset_id: str, table_id: str, chunk_si
             return total
 
 
-def _exportable_value(value: Any) -> Any:
+def _exportable_value(value: Any, field_type: str | None = None) -> Any:
     if isinstance(value, (list, dict)):
         import json
         return json.dumps(value, ensure_ascii=False)
+    if field_type == "STRING" and value is not None and not isinstance(value, str):
+        return str(value)
     return value
 
 

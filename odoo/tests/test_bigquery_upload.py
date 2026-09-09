@@ -102,3 +102,23 @@ def test_load_query_rejects_new_columns_in_later_chunk(fake_client, monkeypatch)
     with pytest.raises(ValueError, match="schema changed.*new_column"):
         bigquery.load_query_to_bigquery({"model": "x", "method": "search_read"}, "ds", "tbl", chunk_size=1)
     assert len(fake_client._loads) == 1
+
+
+def test_load_query_serializes_later_heterogeneous_values_for_string_schema(fake_client, monkeypatch):
+    from routers import bigquery
+
+    chunks = iter([
+        [{"analytic_distribution": "initial"}],
+        [{"analytic_distribution": True}],
+    ])
+    monkeypatch.setattr(bigquery, "get_bigquery_client", lambda: fake_client)
+    from routers import runner
+    monkeypatch.setattr(runner, "fetch_query_rows", lambda *args, **kwargs: next(chunks))
+
+    loaded = bigquery.load_query_to_bigquery(
+        {"model": "x", "method": "search_read"}, "ds", "tbl", chunk_size=1
+    )
+
+    assert loaded == 2
+    assert fake_client._loads[1][0] == [{"analytic_distribution": "True"}]
+    assert fake_client._loads[1][2].schema[0].field_type == "STRING"
