@@ -176,7 +176,10 @@
       <ng-template #content>
         <div class="step-content">
           <div class="step-header">
-            <p class="hint">Opcional. Sin filtros se traen todos los registros.</p>
+            <div>
+              <p class="hint">Opcional. Sin filtros se traen todos los registros.</p>
+              <p-button label="📖 Guía de filtros" icon="pi pi-book" [outlined]="true" size="small" (onClick)="showFilterGuide.set(true)" />
+            </div>
             <p-button label="← Volver" [text]="true" size="small" (onClick)="goTo(1)" />
           </div>
 
@@ -204,7 +207,7 @@
                           @case ('number') { <p-inputnumber [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" [useGrouping]="false" styleClass="filter-val" /> }
                           @case ('date') { <input type="date" class="filter-val filter-date" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" /> }
                           @case ('datetime') { <input type="datetime-local" class="filter-val filter-date" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" /> }
-                          @default { <input pInputText class="filter-val" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" [placeholder]="node.operator === 'in' || node.operator === 'not in' || node.operator === 'child_of' || node.operator === 'parent_of' ? 'IDs o valores separados por comas...' : 'Valor...'" /> }
+                          @default { <input pInputText class="filter-val" [ngModel]="$any(node.value)" (ngModelChange)="updateCondition(node.id!, { value: $event })" [placeholder]="valuePlaceholder($any(node))" /> }
                         }
                         <p-button [label]="node.negated ? 'Quitar NOT' : 'NOT'" [outlined]="true" size="small" (onClick)="updateCondition(node.id!, { negated: !node.negated })" /><p-button icon="pi pi-times" severity="danger" [text]="true" (onClick)="removeNode(node.id!)" />
                       </div> }
@@ -292,6 +295,41 @@
 
   </p-stepper>
 </div>
+
+<!-- Filter Guide Dialog -->
+@if (showFilterGuide()) {
+  <p-dialog
+    [visible]="showFilterGuide()"
+    (visibleChange)="showFilterGuide.set($event)"
+    header="Guía de filtros"
+    [modal]="true"
+    [style]="{ width: 'min(900px, 95vw)' }"
+    [maximizable]="true"
+  >
+    <div class="filter-guide" aria-label="Guía detallada de filtros">
+      @for (section of filterGuideSections; track section.title) {
+        <section class="filter-guide-section">
+          <h2>{{ section.title }}</h2>
+          <p>{{ section.introduction }}</p>
+          @for (item of section.items; track item.title) {
+            <article class="filter-guide-item">
+              <h3>{{ item.title }}</h3>
+              <p>{{ item.description }}</p>
+              @if (item.examples?.length) {
+                <ul class="filter-guide-examples">
+                  @for (example of item.examples; track example) { <li><code>{{ example }}</code></li> }
+                </ul>
+              }
+            </article>
+          }
+        </section>
+      }
+    </div>
+    <div class="dialog-actions">
+      <p-button label="Cerrar" icon="pi pi-times" (onClick)="showFilterGuide.set(false)" />
+    </div>
+  </p-dialog>
+}
 
 <!-- Propagation Result Dialog -->
 @if (showPropagationDialog()) {

@@ -31,6 +31,18 @@ export type FilterNode = FilterRow | FilterGroup;
 export interface OperatorOption {
   value: string; label: string; help: string; forTypes: string[];
 }
+export interface FilterGuideItem {
+  title: string;
+  description: string;
+  examples?: string[];
+}
+export interface FilterGuideSection {
+  title: string;
+  introduction: string;
+  items: FilterGuideItem[];
+}
+
+const RELATIONAL_FIELD_TYPES = ['many2one', 'many2many', 'one2many'];
 
 const PINNED: ModelOption[] = [
   { label: 'Clientes y Proveedores', model: 'res.partner',      description: 'Contactos, clientes, proveedores',   icon: '👥' },
@@ -63,6 +75,67 @@ const OPERATORS: OperatorOption[] = [
   { value: 'parent_of', label: 'es padre de', help: 'ID o IDs hijo. Ej.: parent_of 7', forTypes: ['many2one', 'integer'] },
 ];
 
+const FILTER_GUIDE_SECTIONS: FilterGuideSection[] = [
+  {
+    title: '1. Elegí los campos antes de filtrar',
+    introduction: 'En el paso Campos marcá los campos que querés devolver. El paso Filtros solo ofrece esos campos: si un filtro guardado usa un campo que ya no está seleccionado, primero volvé a seleccionarlo para poder editarlo.',
+    items: [{ title: 'Campos disponibles', description: 'Seleccionar un campo lo hace disponible para las condiciones y también define las columnas del resultado. Podés buscar por nombre o por clave técnica.' }],
+  },
+  {
+    title: '2. Operadores de comparación',
+    introduction: 'Se aplican a números, fechas, horas y, cuando corresponde, otros valores. El valor debe respetar el tipo del campo.',
+    items: [
+      { title: '= — igual a', description: 'Coincidencia exacta.', examples: ['amount_total = 100'] },
+      { title: '!= — distinto de', description: 'Excluye la coincidencia exacta.', examples: ['state != cancel'] },
+      { title: '=? — igual si está definido', description: 'Compara con = cuando el valor está definido; un valor vacío no agrega una restricción útil. Es práctico para filtros opcionales.', examples: ['partner_id =? 45'] },
+      { title: '> y >= — mayor / mayor o igual', description: 'Comparan valores numéricos, fechas o fechas-hora.', examples: ['amount_total > 1000', 'date_order >= 2024-01-01'] },
+      { title: '< y <= — menor / menor o igual', description: 'Comparan valores numéricos, fechas o fechas-hora.', examples: ['amount_total < 500', 'date_order <= 2024-12-31'] },
+    ],
+  },
+  {
+    title: '3. Texto y patrones',
+    introduction: 'Estos operadores se usan en campos de texto y relaciones que se buscan por nombre. % representa cualquier cantidad de caracteres y _ representa exactamente un carácter; podés escribirlos explícitamente.',
+    items: [
+      { title: '=like — coincidencia exacta sensible a mayúsculas', description: 'Usa LIKE sin comodines implícitos: ACME no equivale a %ACME%. Agregá % o _ si necesitás un patrón.', examples: ['name =like ACME', 'name =like ACME%'] },
+      { title: 'like — contiene, sensible a mayúsculas', description: 'Odoo agrega comodines implícitos y se comporta como una búsqueda de contenido. También interpreta % y _ como comodines.', examples: ['name like acme → contiene acme'] },
+      { title: 'not like — no contiene, sensible a mayúsculas', description: 'Excluye el patrón de like; sin comodines escritos se comporta como “no contiene” en Odoo.', examples: ['name not like test'] },
+      { title: '=ilike — coincidencia exacta sin distinguir mayúsculas', description: 'Es la variante insensible a mayúsculas de =like y no agrega comodines implícitos.', examples: ['name =ilike acme', 'name =ilike ACME%'] },
+      { title: 'ilike — contiene, sin distinguir mayúsculas', description: 'Odoo agrega comodines implícitos: es la búsqueda “contiene” recomendada para texto. % y _ siguen siendo comodines.', examples: ['name ilike acme → contiene Acme, ACME o acme'] },
+      { title: 'not ilike — no contiene, sin distinguir mayúsculas', description: 'Excluye la búsqueda contiene de ilike.', examples: ['name not ilike test'] },
+    ],
+  },
+  {
+    title: '4. Listas y jerarquías',
+    introduction: 'Escribí valores separados por comas; la interfaz los serializa como una lista. Se aceptan IDs numéricos o valores de texto cuando Odoo los admite.',
+    items: [
+      { title: 'in — está en', description: 'Coincide con cualquiera de los valores de la lista. Es útil en campos escalares, relaciones e IDs.', examples: ['id in 1, 2, 3'] },
+      { title: 'not in — no está en', description: 'Excluye todos los valores indicados.', examples: ['state not in draft, cancel'] },
+      { title: 'child_of — descendiente de', description: 'Busca registros descendientes de uno o varios IDs (incluye el registro de referencia según la semántica de Odoo). Se usa principalmente en relaciones jerárquicas, como categorías, departamentos o ubicaciones.', examples: ['categ_id child_of 7', 'categ_id child_of 7, 9'] },
+      { title: 'parent_of — antecesor de', description: 'Busca registros que son antecesores de uno o varios IDs. Se usa en relaciones con jerarquía.', examples: ['parent_id parent_of 45'] },
+    ],
+  },
+  {
+    title: '5. Grupos AND, OR y NOT',
+    introduction: 'Cada grupo combina sus condiciones con Y (AND) u O (OR). Podés negar una condición o un grupo completo para construir expresiones claras.',
+    items: [
+      { title: 'AND (Y)', description: 'Deben cumplirse todas las condiciones del grupo.', examples: ['(state = sale) AND (amount_total > 1000)'] },
+      { title: 'OR (O) y grupos anidados', description: 'Al combinar grupos, construí exactamente la precedencia que necesitás.', examples: ['(name ilike acme OR email ilike acme) AND active = true'] },
+      { title: 'NOT (no)', description: 'Invierte una condición o un grupo. Para registros sin relación, usá el booleano false con el operador correspondiente, no el texto “false”.', examples: ['product_id = false', 'NOT (state = cancel)'] },
+    ],
+  },
+  {
+    title: '6. Errores frecuentes y límites',
+    introduction: 'Si una consulta devuelve resultados inesperados, revisá estos casos antes de cambiar el dominio.',
+    items: [
+      { title: 'Booleano false y texto “false”', description: 'En una relación, product_id = false significa que no hay producto relacionado. La palabra “false” entre comillas sería texto y no es equivalente; el editor la convierte a booleano solo para comparaciones vacías de relaciones.' },
+      { title: 'Campos de relación', description: 'Las relaciones usan IDs para =, !=, =? e in, y pueden admitir búsqueda por nombre con like/ilike. child_of y parent_of solo tienen sentido en relaciones jerárquicas.' },
+      { title: 'Empieza por', description: 'Como like/ilike son contiene en Odoo, para starts-with escribí el comodín explícito con igualdad de patrón: =ilike 45%.', examples: ['code =ilike 45%'] },
+      { title: 'Valores vacíos', description: 'No dejes vacío un operador que requiere valor. Para ausencia de una relación usá false; =? sirve para filtros opcionales cuando el valor no está definido.' },
+      { title: 'Límite y paginación', description: 'El límite de la consulta restringe los registros que devuelve. La tabla además pagina los resultados; aumentar páginas no recupera registros excluidos por el límite. Dejá el límite vacío para todos, teniendo en cuenta el costo de consultas grandes.' },
+    ],
+  },
+];
+
 @Component({
   selector: 'app-query-create',
   imports: [CommonModule, FormsModule, ButtonModule, InputTextModule, SelectModule, StepperModule, CardModule, TagModule, SkeletonModule, InputNumberModule, DialogModule],
@@ -85,6 +158,8 @@ export class QueryCreate implements OnInit {
   propagationResult = signal<any | null>(null);
   showPropagationDialog = signal(false);
   showDestructiveConfirm = signal(false);
+  showFilterGuide = signal(false);
+  filterGuideSections = FILTER_GUIDE_SECTIONS;
   removedFields = signal<string[]>([]);
   originalFields = signal<string[]>([]); // snapshot for destructive confirm
 
@@ -163,7 +238,7 @@ export class QueryCreate implements OnInit {
   }
 
   valueInputKind(f: FilterRow): 'bool' | 'number' | 'date' | 'datetime' | 'text' {
-    if (f.operator === 'ilike' || f.operator === 'not ilike') return 'text';
+    if (['in', 'not in', 'child_of', 'parent_of', 'like', 'not like', '=like', 'ilike', 'not ilike', '=ilike'].includes(f.operator)) return 'text';
     const type = this.getFieldType(f.field);
     if (type === 'boolean') return 'bool';
     if (['integer', 'float', 'monetary'].includes(type)) return 'number';
@@ -176,6 +251,19 @@ export class QueryCreate implements OnInit {
     const type = this.getFieldType(fieldKey);
     if (['char', 'text', 'html', 'many2one'].includes(type)) return 'ilike';
     return '=';
+  }
+
+  isRelationalField(fieldKey: string): boolean {
+    return RELATIONAL_FIELD_TYPES.includes(this.getFieldType(fieldKey));
+  }
+
+  valuePlaceholder(row: FilterRow): string {
+    if (this.isRelationalField(row.field) && ['=', '!=', '=?'].includes(row.operator)) {
+      return 'ID o vacío (escribí false)...';
+    }
+    return row.operator === 'in' || row.operator === 'not in' || row.operator === 'child_of' || row.operator === 'parent_of'
+      ? 'IDs o valores separados por comas...'
+      : 'Valor...';
   }
 
   onFieldChange(i: number, fieldKey: string) {
@@ -401,7 +489,10 @@ export class QueryCreate implements OnInit {
 
   private clause(row: FilterRow): unknown[] {
     let value: unknown = row.value;
-    if (row.operator === 'in' || row.operator === 'not in' || row.operator === 'child_of' || row.operator === 'parent_of') {
+    if (this.isRelationalField(row.field) && ['=', '!=', '=?'].includes(row.operator) &&
+        typeof value === 'string' && value.trim().toLowerCase() === 'false') {
+      value = false;
+    } else if (row.operator === 'in' || row.operator === 'not in' || row.operator === 'child_of' || row.operator === 'parent_of') {
       const hierarchy = row.operator === 'child_of' || row.operator === 'parent_of';
       const scalarHierarchy = hierarchy && !Array.isArray(value) && String(value ?? '').trim() !== '';
       const values = Array.isArray(value) ? value : String(value ?? '').split(',').map(v => v.trim()).filter(Boolean);

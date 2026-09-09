@@ -476,7 +476,25 @@ it('exposes every supported operator, including =like and =ilike', () => expect(
     expect(component.domainWarning()).toBe('');
     expect(parsed).toEqual([{ field: 'name', operator: '=', value: false }]);
   });
-  it('converts numeric comma lists and scalar hierarchy IDs', () => { component.filters.set([{ field: 'amount', operator: 'in', value: '1, 20, -3' }, { field: 'amount', operator: 'child_of', value: '7' }]); expect(component.buildDomain()).toEqual(['&', ['amount', 'in', [1, 20, -3]], ['amount', 'child_of', 7]]); });
+  it('serializes false as a boolean only for relational empty-value comparisons', () => {
+        component.availableFields.set([
+          { key: 'product_id', string: 'Product', type: 'many2one', relation: 'product.product' },
+          { key: 'name', string: 'Name', type: 'char' },
+        ]);
+        component.filters.set([
+          { field: 'product_id', operator: '!=', value: 'false' },
+          { field: 'name', operator: '!=', value: 'false' },
+        ]);
+
+        expect(component.buildDomain()).toEqual([
+          '&',
+          ['product_id', '!=', false],
+          ['name', '!=', 'false'],
+        ]);
+        expect(component.valuePlaceholder({ field: 'product_id', operator: '!=', value: '' })).toContain('false');
+        expect(component.valuePlaceholder({ field: 'name', operator: '!=', value: '' })).toBe('Valor...');
+      });
+      it('converts numeric comma lists and scalar hierarchy IDs', () => { component.filters.set([{ field: 'amount', operator: 'in', value: '1, 20, -3' }, { field: 'amount', operator: 'child_of', value: '7' }]); expect(component.buildDomain()).toEqual(['&', ['amount', 'in', [1, 20, -3]], ['amount', 'child_of', 7]]); });
   it('round-trips datetime and negated clauses', () => { const domain = ['&', ['when', '>=', '2024-01-02 03:04:05'], ['!', ['name', 'not ilike', 'x']]]; const filters = (component as any).parseDomain(domain); component.filters.set(filters); component.domainEdited = true; expect(filters).toEqual([{ field: 'when', operator: '>=', value: '2024-01-02T03:04' }, { field: 'name', operator: 'not ilike', value: 'x', negated: true }]); expect(component.buildDomain()).toEqual(['&', ['when', '>=', '2024-01-02 03:04:00'], ['!', ['name', 'not ilike', 'x']]]); });
   it('preserves unsupported domains after a user edit', () => { const domain = ['|', ['name', '=', 'a'], ['&', ['name', '=', 'b'], ['name', '=', 'c']]]; (component as any).loadedDomain = domain; component.filters.set((component as any).parseDomain(domain)); component.domainEdited = true; expect(component.domainWarning()).toContain('no representable'); expect(component.buildDomain()).toEqual(domain); });
   it('creates (A OR B) AND C through nested group operations', () => {

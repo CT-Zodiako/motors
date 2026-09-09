@@ -534,3 +534,15 @@ small { font-size: 12px; color: #6e6e73; }
 .group-header, .group-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .group-children { display: flex; flex-direction: column; gap: 8px; padding-left: 12px; border-left: 2px solid #d6e8ff; }
 .group-actions { margin: 10px 0 0; }
+
+/* FILTER GUIDE */
+.filter-guide { max-height: 70vh; overflow-y: auto; padding-right: 8px; color: #374151; }
+.filter-guide-section { padding: 0 0 1.25rem; margin-bottom: 1.25rem; border-bottom: 1px solid #e5e7eb; }
+.filter-guide-section:last-child { border-bottom: 0; margin-bottom: 0; }
+.filter-guide-section h2 { margin: 0 0 .5rem; color: #1d1d1f; font-size: 1.05rem; }
+.filter-guide-section > p { margin: 0 0 .75rem; line-height: 1.5; }
+.filter-guide-item { margin: .75rem 0 0 1rem; }
+.filter-guide-item h3 { margin: 0 0 .25rem; color: #1d4ed8; font-size: .92rem; }
+.filter-guide-item p { margin: 0; line-height: 1.45; font-size: .88rem; }
+.filter-guide-examples { margin: .4rem 0 0; padding-left: 1.25rem; }
+.filter-guide-examples code { display: inline-block; padding: .2rem .45rem; border-radius: 4px; background: #f3f4f6; color: #111827; font-size: .82rem; }
