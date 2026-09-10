@@ -70,7 +70,9 @@ export class App implements OnInit {
       label: 'Administración',
       children: [
         { id: 'admin', label: 'Usuarios', icon: 'pi-users', permission: 'menu.admin.usuarios' },
-        { id: 'admin-dashboards', label: 'Dashboards', icon: 'pi-chart-bar', permission: 'menu.admin.dashboards' },
+        // Dashboards feature temporarily deactivated per user request (2026-09-10).
+        // Kept commented out (not deleted) so it can be re-enabled in the future.
+        // { id: 'admin-dashboards', label: 'Dashboards', icon: 'pi-chart-bar', permission: 'menu.admin.dashboards' },
       ]
     },
   ];
@@ -82,10 +84,15 @@ export class App implements OnInit {
   // via the recursive filterMenu / render helpers. The Visualizaciones group only
   // exists while there is at least one published dashboard (spec §6).
   menuTree = computed<MenuNode[]>(() => {
-    const items = this.dashboardItems();
-    return items.length > 0
-      ? [...this.staticMenu, { label: 'Visualizaciones', children: items }]
-      : [...this.staticMenu];
+    // Dashboards feature temporarily deactivated per user request (2026-09-10):
+    // the "Visualizaciones" menu is disabled, so menuTree always returns just
+    // the static menu, regardless of dashboardItems(). Kept commented out
+    // (not deleted) so the dynamic merge can be restored in the future.
+    // const items = this.dashboardItems();
+    // return items.length > 0
+    //   ? [...this.staticMenu, { label: 'Visualizaciones', children: items }]
+    //   : [...this.staticMenu];
+    return [...this.staticMenu];
   });
 
   // Footer items rendered outside the recursive menu tree.
@@ -109,7 +116,10 @@ export class App implements OnInit {
   ngOnInit() {
     this.auth.fetchMe().subscribe({
       error: () => {},
-      complete: () => this.refreshDashboards(),
+      // refreshDashboards() is disabled while the dashboards feature is
+      // deactivated per user request (2026-09-10). The method itself is left
+      // intact and unused so it can be re-wired here in the future.
+      complete: () => {},
     });
   }
 

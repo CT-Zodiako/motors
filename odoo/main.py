@@ -26,7 +26,9 @@ app.include_router(export.router, dependencies=[Depends(get_current_user)])
 app.include_router(bigquery.router, dependencies=[Depends(get_current_user)])
 app.include_router(file_upload.router, dependencies=[Depends(get_current_user)])
 app.include_router(schedules.router, dependencies=[Depends(get_current_user)])
-app.include_router(dashboards.router, dependencies=[Depends(get_current_user)])
+# Dashboards feature temporarily deactivated per user request (2026-09-10).
+# Kept commented out (not deleted) so it can be re-enabled in the future.
+# app.include_router(dashboards.router, dependencies=[Depends(get_current_user)])
 
 import logging
 
