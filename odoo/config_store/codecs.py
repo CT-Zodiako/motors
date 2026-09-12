@@ -91,6 +91,28 @@ TABLE_SCHEMAS: dict[str, list[dict[str, Any]]] = {
         {"name": "permission_id", "type": "STRING", "mode": "REQUIRED"},
         {"name": "created_at", "type": "TIMESTAMP", "mode": "REQUIRED"},
     ],
+    "odoo_systems": [
+        {"name": "id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "name", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
+        {"name": "sort_order", "type": "INT64", "mode": "REQUIRED"},
+    ],
+    "odoo_modules": [
+        {"name": "id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "system_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "name", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
+        {"name": "sort_order", "type": "INT64", "mode": "REQUIRED"},
+    ],
+    "odoo_menu_options": [
+        {"name": "id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "module_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "name", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "menu_key", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "permission_id", "type": "STRING", "mode": "REQUIRED"},
+        {"name": "active", "type": "BOOL", "mode": "REQUIRED"},
+        {"name": "sort_order", "type": "INT64", "mode": "REQUIRED"},
+    ],
     "odoo_dashboards": [
         {"name": "id", "type": "INT64", "mode": "REQUIRED"},
         {"name": "menu_key", "type": "STRING", "mode": "REQUIRED"},

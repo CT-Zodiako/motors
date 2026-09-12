@@ -23,6 +23,9 @@ class InMemoryConfigStore:
             "odoo_permissions": [],
             "odoo_user_permissions": [],
             "odoo_dashboards": [],
+            "odoo_systems": [],
+            "odoo_modules": [],
+            "odoo_menu_options": [],
         }
         self._cache = Cache(ttl_seconds=30)
         self._next_id = 1
@@ -200,6 +203,27 @@ class InMemoryConfigStore:
             }
             self._data["odoo_permissions"].append(codecs.encode_row("odoo_permissions", row))
         self._cache.invalidate_permissions()
+
+    def _list_navigation(self, table: str) -> list[dict]:
+        rows = [codecs.decode_row(table, r) for r in self._data[table]]
+        return sorted(rows, key=lambda r: (r["sort_order"], r["id"]))
+
+    def list_systems(self) -> list[dict]:
+        return self._list_navigation("odoo_systems")
+
+    def list_modules(self) -> list[dict]:
+        return self._list_navigation("odoo_modules")
+
+    def list_menu_options(self) -> list[dict]:
+        return self._list_navigation("odoo_menu_options")
+
+    def seed_navigation_defaults(self) -> None:
+        from .bootstrap import NAVIGATION_SEEDS
+        for table, seeds in NAVIGATION_SEEDS.items():
+            existing_ids = {r["id"] for r in self._data[table]}
+            for row in seeds:
+                if row["id"] not in existing_ids:
+                    self._data[table].append(codecs.encode_row(table, row))
 
     def seed_defaults(self) -> None:
         # General category if empty

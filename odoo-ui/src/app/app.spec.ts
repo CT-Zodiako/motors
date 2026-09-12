@@ -1,157 +1,155 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { computed, signal } from '@angular/core';
-import { provideZonelessChangeDetection } from '@angular/core';
+import { signal } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideAnimations } from '@angular/platform-browser/animations';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { App } from './app';
-import { AuthService, User } from './services/auth';
-import { DashboardsService, Dashboard } from './services/dashboards';
+import { AuthService } from './services/auth';
+import { NavigationContext } from './services/menu';
 
-class FakeAuthService {
-  private userSignal = signal<User | null>(null);
-  private permissionsSignal = signal<string[]>([]);
-  user = computed(() => this.userSignal());
-  isAuthenticated = computed(() => this.userSignal() !== null);
-  hasPermission(permission: string): boolean {
-    return this.permissionsSignal().includes(permission);
-  }
-  fetchMe() {
-    return of(this.userSignal());
-  }
-  logout() {
-    return of({ ok: true });
-  }
-  grant(user: User, permissions: string[]) {
-    this.userSignal.set(user);
-    this.permissionsSignal.set(permissions);
-  }
+const systems: NavigationContext['systems'] = ['1', '2'].map(id => ({
+  id, name: id, active: true, sort_order: 0,
+  modules: ['a', 'b'].map(suffix => ({
+    id: `${id}-${suffix}`, system_id: id, name: suffix, active: true, sort_order: 0, menu: [],
+  })),
+}));
+
+function context(system: string | null = '1', module: string | null = '1-a'): NavigationContext {
+  return { systems, selected_system_id: system, selected_module_id: module, menu: [] };
 }
 
-class FakeDashboardsService {
-  rows = signal<Dashboard[]>([]);
-  list() {
-    return of(this.rows());
-  }
-}
-
-const VIEW_PERMISSION = 'menu.visualizaciones.dashboards';
-const STATIC_PERMISSIONS = [
-  'menu.consultar.queries',
-  'menu.consultar.ejecutar',
-  'menu.consultar.programar',
-  'menu.cargar.create',
-  'menu.cargar.upload',
-  'menu.admin.usuarios',
-  'menu.admin.dashboards',
-  'menu.cuenta.change_password',
-];
-
-function dashboard(menuKey: string, name: string): Dashboard {
-  return { menu_key: menuKey, name, embed_url: 'https://bi.example/x', definition: null, active: true };
-}
-
-describe('App dynamic dashboard menu', () => {
-  let auth: FakeAuthService;
-  let dashboards: FakeDashboardsService;
+describe('App authoritative menu context', () => {
+  const user = signal<object | null>(null);
+  let http: HttpTestingController;
 
   beforeEach(() => {
-    auth = new FakeAuthService();
-    dashboards = new FakeDashboardsService();
+    user.set({ id: '1' });
     TestBed.configureTestingModule({
       imports: [App],
-      providers: [
-        provideZonelessChangeDetection(),
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        provideAnimations(),
-        MessageService,
-        { provide: AuthService, useValue: auth },
-        { provide: DashboardsService, useValue: dashboards },
+      providers: [provideHttpClient(), provideHttpClientTesting(), MessageService,
+        { provide: AuthService, useValue: {
+          user, isAuthenticated: signal(true), authChecked: signal(true), fetchMe: () => of(user()),
+        } },
       ],
     });
+    TestBed.overrideComponent(App, { set: { template: '', imports: [] } });
+    http = TestBed.inject(HttpTestingController);
   });
 
-  function createApp(): App {
+  function start() {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
-    return fixture.componentInstance;
+    return fixture;
   }
 
-  function visualizacionesGroup(app: App) {
-    return app.visibleMenu().find((g) => g.label === 'Visualizaciones');
-  }
-
-  it('published dashboards appear under Visualizaciones as dashboard:<menu_key> nodes', () => {
-    dashboards.rows.set([dashboard('dashboards', 'Dashboards'), dashboard('dashboards-ventas', 'Ventas')]);
-    auth.grant({ id: '1', email: 'u@x.com', role: 'user' }, [VIEW_PERMISSION, ...STATIC_PERMISSIONS]);
-    const app = createApp();
-
-    const group = visualizacionesGroup(app);
-    expect(group).toBeDefined();
-    expect(group!.children!.map((c) => c.id)).toEqual(['dashboard:dashboards', 'dashboard:dashboards-ventas']);
-    expect(group!.children!.map((c) => c.label)).toEqual(['Dashboards', 'Ventas']);
+  it('loads once and accepts the server selection rather than the first available IDs', () => {
+    const fixture = start();
+    const request = http.expectOne(req => req.url.endsWith('/auth/context'));
+    expect(request.request.params.keys()).toEqual([]);
+    request.flush(context('2', '2-b'));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.selectedSystem()).toBe('2');
+    expect(fixture.componentInstance.selectedModule()).toBe('2-b');
+    http.verify();
   });
 
-  it('empty dashboard list renders no Visualizaciones group', () => {
-    dashboards.rows.set([]);
-    auth.grant({ id: '1', email: 'u@x.com', role: 'user' }, [VIEW_PERMISSION, ...STATIC_PERMISSIONS]);
-    const app = createApp();
-
-    expect(visualizacionesGroup(app)).toBeUndefined();
+  it('selects the first available module locally and makes one request per selection', () => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush(context());
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    app.selectSystem('2');
+    expect(app.context()).toBeNull();
+    fixture.detectChanges();
+    const request = http.expectOne(req => req.url.endsWith('/auth/context'));
+    expect(request.request.params.get('system_id')).toBe('2');
+    expect(request.request.params.get('module_id')).toBe('2-a');
+    request.flush(context('2', '2-b'));
+    fixture.detectChanges();
+    expect(app.selectedModule()).toBe('2-b');
+    app.selectModule('2-a');
+    fixture.detectChanges();
+    http.expectOne(req => req.params.get('module_id') === '2-a').flush(context('2', '2-a'));
+    fixture.detectChanges();
+    http.verify();
   });
 
-  it('users without the view permission see no dashboard entries', () => {
-    dashboards.rows.set([dashboard('dashboards', 'Dashboards')]);
-    auth.grant({ id: '1', email: 'u@x.com', role: 'user' }, STATIC_PERMISSIONS);
-    const app = createApp();
-
-    expect(visualizacionesGroup(app)).toBeUndefined();
+  it('normalizes null server selection locally without retrying', () => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush(context(null, null));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.selectedSystem()).toBe('1');
+    expect(fixture.componentInstance.selectedModule()).toBe('1-a');
+    expect(fixture.componentInstance.context()?.selected_system_id).toBe('1');
+    expect(fixture.componentInstance.context()?.selected_module_id).toBe('1-a');
+    http.verify();
   });
 
-  it('static tabs and groups remain unchanged', () => {
-    dashboards.rows.set([dashboard('dashboards', 'Dashboards')]);
-    auth.grant({ id: '1', email: 'u@x.com', role: 'user' }, [VIEW_PERMISSION, ...STATIC_PERMISSIONS]);
-    const app = createApp();
-
-    const labels = app.visibleMenu().map((g) => g.label);
-    expect(labels).toEqual(['Consultar', 'Cargar datos', 'Administración', 'Visualizaciones']);
-
-    const admin = app.visibleMenu().find((g) => g.label === 'Administración');
-    expect(admin!.children!.map((c) => c.id)).toEqual(['admin', 'admin-dashboards']);
+  it('fails closed on denial and reloads context for a different authenticated user', () => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush(context());
+    fixture.detectChanges();
+    user.set({ id: '2' });
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    expect(app.context()).toBeNull();
+    http.expectOne(req => req.url.endsWith('/auth/context'))
+      .flush({}, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+    expect(app.contextError()).toBe(true);
+    expect(app.visibleMenu()).toEqual([]);
+    app.setTab('dashboard:ventas');
+    expect(app.activeTab()).toBe('home');
+    http.verify();
   });
 
-  it('isDashboardTab identifies dynamic dashboard tabs only', () => {
-    const app = createApp();
-    expect(app.isDashboardTab('dashboard:dashboards')).toBe(true);
-    expect(app.isDashboardTab('home')).toBe(false);
-    expect(app.isDashboardTab('admin-dashboards')).toBe(false);
-  });
-
-  it('dashboardMenuKey() strips the dashboard: prefix and is null on static tabs', () => {
-    const app = createApp();
-    expect(app.dashboardMenuKey()).toBeNull();
-    app.setTab('dashboard:ventas-por-vendedor');
-    expect(app.dashboardMenuKey()).toBe('ventas-por-vendedor');
+  it.each(['1', '2'])('opens only the fixed workflow in system %s and clears it on module changes', (system) => {
+    const fixture = start();
+    const option = {
+      id: 'process', module_id: `${system}-a`, name: 'Procesos Bizagi', menu_key: 'procesos.bizagi',
+      permission_id: 'menu.operaciones.procesos', active: true, sort_order: 0,
+      workflow_url: '/WorkFlow/index.html',
+    };
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush({ ...context(system, `${system}-a`), menu: [option] });
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    app.setTab('workflow:process');
+    expect(app.workflowOption()?.name).toBe('Procesos Bizagi');
+    expect(app.demoOption()).toBeUndefined();
+    const frame = document.createElement('iframe');
+    frame.src = '/WorkFlow/index.html#diagram';
+    const navigate = vi.spyOn(frame, 'src', 'set');
+    for (let attempt = 0; attempt < 2; attempt++) {
+      app.backToProcesses(frame);
+      expect(navigate).toHaveBeenNthCalledWith(attempt + 1, '/WorkFlow/index.html');
+      expect(app.activeTab()).toBe('workflow:process');
+      expect(app.selectedSystem()).toBe(system);
+      expect(app.selectedModule()).toBe(`${system}-a`);
+    }
+    navigate.mockRestore();
+    app.context.set({ ...context(system, `${system}-a`), menu: [{ ...option, workflow_url: 'https://example.com' }] });
+    expect(app.workflowOption()).toBeUndefined();
     app.setTab('home');
-    expect(app.dashboardMenuKey()).toBeNull();
+    app.setTab('workflow:process');
+    expect(app.activeTab()).toBe('home');
+    app.selectModule(`${system}-b`);
+    expect(app.workflowOption()).toBeUndefined();
+    http.verify();
   });
 
-  it('refreshDashboards() reloads menu entries (publish adds, unpublish/delete removes)', () => {
-    dashboards.rows.set([dashboard('dashboards', 'Dashboards')]);
-    auth.grant({ id: '1', email: 'u@x.com', role: 'user' }, [VIEW_PERMISSION, ...STATIC_PERMISSIONS]);
-    const app = createApp();
-    expect(visualizacionesGroup(app)!.children!.map((c) => c.id)).toEqual(['dashboard:dashboards']);
-
-    dashboards.rows.set([]);
-    app.refreshDashboards();
-    expect(visualizacionesGroup(app)).toBeUndefined();
-
-    dashboards.rows.set([dashboard('nuevo', 'Nuevo')]);
-    app.refreshDashboards();
-    expect(visualizacionesGroup(app)!.children!.map((c) => c.id)).toEqual(['dashboard:nuevo']);
+  it('keeps dashboard navigation deactivated even when returned by the backend', () => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush({ ...context(), menu: [{
+      id: 'dashboard', module_id: '1-a', name: 'Dashboards', menu_key: 'admin.dashboards',
+      permission_id: 'permission', active: true, sort_order: 0,
+    }] });
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    expect(app.visibleMenu()).toEqual([]);
+    app.setTab('admin-dashboards');
+    expect(app.activeTab()).toBe('home');
+    http.verify();
   });
 });

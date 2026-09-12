@@ -2,35 +2,192 @@
   display: block;
 }
 
-/* El layout principal y el sidebar están definidos en styles.css (global). */
-
-/* Sidebar footer: auth actions + version */
-.sidebar-footer {
-  padding: 1rem 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: auto;
+.sidebar-company-logo {
+  display: block;
+  width: 100%;
+  max-width: 100px;
+  height: auto;
+  margin: 0 auto 0.4rem;
 }
 
-.nav-empty {
+.content.workflow-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 2rem 1rem;
-  color: var(--app-muted);
-  font-size: 0.85rem;
-  text-align: center;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
 }
 
-.nav-empty i {
+.context-workflow {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 1rem;
+}
+
+.workflow-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  flex-shrink: 0;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--app-primary);
+  border-radius: 8px;
+  background: var(--app-primary);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+
+.workflow-back:hover {
+  background: var(--app-primary-hover);
+}
+
+.workflow-back:focus-visible {
+  outline: 3px solid var(--app-primary);
+  outline-offset: 3px;
+}
+
+.workflow-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: white;
+}
+
+/* The sidebar is in normal flow on mobile; keep the viewer usable below it. */
+@media (max-width: 768px) {
+  .content.workflow-content {
+    height: auto;
+  }
+
+  .context-workflow {
+    flex: none;
+  }
+
+  .workflow-frame {
+    flex: none;
+    height: 70vh;
+    height: 70dvh;
+    min-height: 320px;
+  }
+}
+
+/* Navigation context controls use the same tokens and form language as the rest of the app. */
+.context-selectors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.08);
+}
+
+.context-selectors label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+  color: #1e40af;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.context-selectors label:first-child select {
+  border: 2px solid var(--app-primary);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+}
+
+.context-selectors select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 1.75rem 0 0.65rem;
+  color: var(--app-text);
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.context-selectors select:hover:not(:disabled) {
+  border-color: var(--app-primary);
+}
+
+.context-selectors select:focus {
+  outline: none;
+  border-color: var(--app-primary);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.10);
+}
+
+.context-selectors select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  background: var(--app-bg);
+}
+
+.context-selectors [role='status'],
+.context-selectors [role='alert'] {
+  align-self: center;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.context-selectors [role='alert'] {
+  color: var(--app-error);
+}
+
+.context-demo {
+  padding: 1.5rem;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-shadow);
+}
+
+.context-demo h1 {
+  margin-bottom: 0.5rem;
+  color: var(--app-text);
   font-size: 1.5rem;
 }
 
-.version-info {
-  text-align: center;
-  font-size: 11px;
+.context-demo p {
   color: var(--app-muted);
-  padding-top: 8px;
-  opacity: 0.8;
+  line-height: 1.5;
 }
 
+.app-boot-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  height: 100vh;
+  color: var(--app-muted);
+  background: var(--app-bg);
+}
+
+.app-boot-loading i {
+  color: var(--app-primary);
+  font-size: 2rem;
+}
+
+@media (max-width: 640px) {
+  .context-selectors {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}

@@ -73,6 +73,57 @@ _SEED_PERMISSIONS: list[dict[str, Any]] = [
 ]
 
 
+# System 2 options are demo navigation entries, not new executable API routes.
+_SEED_PERMISSIONS += [
+    {"id": "menu.operaciones.ventas", "label": "Pedidos de venta", "category": "operaciones"},
+    {"id": "menu.operaciones.inventario", "label": "Existencias", "category": "operaciones"},
+    {"id": "menu.operaciones.reportes", "label": "Resumen comercial", "category": "operaciones"},
+    {"id": "menu.operaciones.procesos", "label": "Procesos", "category": "operaciones"},
+]
+
+_SEED_PERMISSIONS += [
+    {"id": "menu.procesos.bizagi", "label": "Procesos", "category": "procesos"},
+]
+
+_SEED_SYSTEMS = [
+    {"id": "1", "name": "Sistema 1 - Odoo Bridge", "active": True, "sort_order": 1},
+    {"id": "2", "name": "Sistema 2 - Operaciones", "active": True, "sort_order": 2},
+]
+_SEED_MODULES = [
+    {"id": f"1-{key}", "system_id": "1", "name": name, "active": True, "sort_order": i}
+    for i, (key, name) in enumerate([
+        ("consultar", "Consultar"), ("cargar", "Cargar"), ("cuenta", "Cuenta"),
+        ("admin", "Administración"), ("visualizaciones", "Visualizaciones"),
+        ("procesos", "Procesos"),
+    ])
+] + [
+    {"id": f"2-{key}", "system_id": "2", "name": name, "active": True, "sort_order": i}
+    for i, (key, name) in enumerate([
+        ("ventas", "Ventas"), ("inventario", "Inventario"), ("reportes", "Reportes"),
+        ("procesos", "Procesos"),
+    ])
+]
+_SEED_MENU_OPTIONS = [
+    {
+        "id": perm["id"],
+        "module_id": (f"2-{perm['id'].split('.')[-1]}" if perm["category"] == "operaciones"
+                      else f"1-{perm['category']}"),
+        "name": perm["label"],
+        "menu_key": perm["id"].removeprefix("menu."),
+        "permission_id": perm["id"],
+        # Dashboards remain deactivated; retaining their permissions is intentional.
+        "active": perm["category"] != "visualizaciones" and perm["id"] != "menu.admin.dashboards",
+        "sort_order": i,
+    }
+    for i, perm in enumerate(_SEED_PERMISSIONS)
+]
+NAVIGATION_SEEDS = {
+    "odoo_systems": _SEED_SYSTEMS,
+    "odoo_modules": _SEED_MODULES,
+    "odoo_menu_options": _SEED_MENU_OPTIONS,
+}
+
+
 def seed_permission_defaults(store: Any) -> None:
     """Idempotent seeding of menu permissions (per-row: inserts only missing ids)."""
     store.seed_permission_defaults()
@@ -132,3 +183,5 @@ def ensure_schema(store: Any) -> None:
 def seed_defaults(store: Any) -> None:
     """Idempotent seeding: General category + 4 seed queries if tables empty."""
     store.seed_defaults()
+    store.seed_permission_defaults()
+    store.seed_navigation_defaults()

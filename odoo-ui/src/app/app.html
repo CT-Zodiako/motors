@@ -1,20 +1,25 @@
 <p-toast />
 
-@if (!authenticated()) {
+@if (!authChecked()) {
+  <div class="app-boot-loading">
+    <i class="pi pi-spin pi-spinner"></i>
+    <span>Verificando sesión…</span>
+  </div>
+} @else if (!authenticated()) {
   <app-login />
 } @else {
   <div class="layout" [class.sidebar-collapsed]="sidebarCollapsed()">
     <aside class="sidebar">
       <div class="sidebar-brand">
+        @if (!sidebarCollapsed()) {
+          <img class="sidebar-company-logo" src="/WorkFlow/libs/img/biz-ex-logo.png" alt="Motorreductores" />
+        }
         <div class="sidebar-logo">
           <i class="pi pi-link"></i>
           @if (!sidebarCollapsed()) {
             <span>Odoo Bridge</span>
           }
         </div>
-        @if (!sidebarCollapsed()) {
-          <p class="sidebar-tagline">Conectá Odoo con BigQuery</p>
-        }
       </div>
 
       <div class="sidebar-user">
@@ -27,6 +32,27 @@
           </div>
         }
       </div>
+
+      @if (!sidebarCollapsed()) {
+        <div class="context-selectors" aria-label="Contexto de navegación">
+          <label for="system-selector">Sistema
+            <select id="system-selector" [value]="selectedSystem()" [disabled]="contextLoading() || systems().length === 0" (change)="selectSystem($any($event.target).value)">
+              @for (system of systems(); track system.id) {
+                <option [value]="system.id">{{ system.name }}</option>
+              }
+            </select>
+          </label>
+          <label for="module-selector">Módulo
+            <select id="module-selector" [value]="selectedModule()" [disabled]="contextLoading() || modules().length === 0" (change)="selectModule($any($event.target).value)">
+              @for (module of modules(); track module.id) {
+                <option [value]="module.id">{{ module.name }}</option>
+              }
+            </select>
+          </label>
+          @if (contextLoading()) { <span role="status">Cargando menú…</span> }
+          @if (contextError()) { <span role="alert">No se pudo cargar el menú.</span> }
+        </div>
+      }
 
       <nav class="sidebar-nav">
         @if (!sidebarCollapsed()) {
@@ -120,7 +146,23 @@
       </button>
     </aside>
 
-    <main class="content">
+    <main class="content" [class.workflow-content]="!!workflowOption()">
+      @if (workflowOption()) {
+        <section class="context-workflow">
+          <button type="button" class="workflow-back" (click)="backToProcesses(workflowFrame)">
+            <i class="pi pi-arrow-left" aria-hidden="true"></i>
+            Volver a Procesos
+          </button>
+          <!-- Bizagi owns the landing page and diagram navigation. -->
+          <iframe #workflowFrame src="/WorkFlow/index.html" title="Procesos Bizagi" class="workflow-frame"></iframe>
+        </section>
+      }
+      @if (demoOption(); as option) {
+        <section class="context-demo">
+          <h1>{{ option.name }}</h1>
+          <p>Demostración de navegación. Esta pantalla no ejecuta operaciones ni modifica datos.</p>
+        </section>
+      }
       @if (activeTab() === 'home')     { <app-welcome /> }
       @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
       @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }

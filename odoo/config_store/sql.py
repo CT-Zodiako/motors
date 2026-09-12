@@ -63,6 +63,33 @@ def T_USER_PERMISSIONS() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Navigation: identifiers are allowlisted; seed values are always parameters.
+# ---------------------------------------------------------------------------
+_NAVIGATION_TABLES = {"odoo_systems", "odoo_modules", "odoo_menu_options"}
+
+
+def SQL_LIST_NAVIGATION(table: str) -> str:
+    if table not in _NAVIGATION_TABLES:
+        raise ValueError("Unknown navigation table")
+    return f"SELECT * FROM `{_t(table)}` ORDER BY sort_order, id"
+
+
+def SQL_SEED_NAVIGATION(table: str) -> str:
+    from .codecs import TABLE_SCHEMAS
+
+    if table not in _NAVIGATION_TABLES:
+        raise ValueError("Unknown navigation table")
+    columns = [c["name"] for c in TABLE_SCHEMAS[table]]
+    source = ", ".join(f"@{c} AS {c}" for c in columns)
+    values = ", ".join(f"source.{c}" for c in columns)
+    return f"""
+MERGE `{_t(table)}` AS target
+USING (SELECT {source}) AS source ON target.id = source.id
+WHEN NOT MATCHED THEN INSERT ({', '.join(columns)}) VALUES ({values})
+"""
+
+
+# ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
 SQL_GET_USER_BY_EMAIL = lambda: f"SELECT * FROM `{_t('odoo_users')}` WHERE lower(email) = lower(@email)"

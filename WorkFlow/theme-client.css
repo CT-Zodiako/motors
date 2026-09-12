@@ -1,0 +1,25 @@
+/* The application owns branding and navigation; hide the entire viewer header. */
+.biz-ex-header-view,
+.biz-ex-logo {
+    display: none !important;
+}
+
+/* Hide Bizagi navigation and its toggles without changing viewer behavior. */
+#sidebar,
+.biz-ex-navigation-left,
+#sidebarButton,
+#toggleMenuButton {
+    display: none !important;
+}
+
+/* Reclaim the navigation column, including responsive off-canvas layouts. */
+.biz-ex-diagram-update-panel-container {
+    width: 100% !important;
+    max-width: 100%;
+    margin-left: 0 !important;
+}
+
+.active .biz-ex-layout {
+    margin-left: 0 !important;
+}
+

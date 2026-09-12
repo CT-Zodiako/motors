@@ -173,6 +173,25 @@ class BigQueryConfigStore:
             table.schema = merged
             self._client.update_table(table, ["schema"])
 
+    def _list_navigation(self, table: str) -> list[dict]:
+        # Do not cache authorization navigation: deactivation is visible immediately.
+        return [codecs.decode_row(table, r) for r in self._query(sql.SQL_LIST_NAVIGATION(table))]
+
+    def list_systems(self) -> list[dict]:
+        return self._list_navigation("odoo_systems")
+
+    def list_modules(self) -> list[dict]:
+        return self._list_navigation("odoo_modules")
+
+    def list_menu_options(self) -> list[dict]:
+        return self._list_navigation("odoo_menu_options")
+
+    def seed_navigation_defaults(self) -> None:
+        from .bootstrap import NAVIGATION_SEEDS
+        for table, seeds in NAVIGATION_SEEDS.items():
+            for row in seeds:
+                self._query(sql.SQL_SEED_NAVIGATION(table), _build_params(table, row))
+
     def seed_defaults(self) -> None:
         # General category if empty
         cats = self._query(sql.SQL_COUNT_CATEGORIES())
@@ -522,10 +541,16 @@ class BigQueryConfigStore:
     # ------------------------------------------------------------------
 
     def get_user_by_email(self, email: str) -> dict | None:
+        key = f"user_by_email:{email.lower()}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
         rows = self._query(sql.SQL_GET_USER_BY_EMAIL(), [_string_param("email", email)])
         if not rows:
             return None
-        return codecs.decode_row("odoo_users", rows[0])
+        decoded = codecs.decode_row("odoo_users", rows[0])
+        self._cache.set(key, decoded)
+        return decoded
 
     def list_users(self) -> list[dict]:
         cached = self._cache.get("users")
@@ -537,10 +562,16 @@ class BigQueryConfigStore:
         return decoded
 
     def get_user_by_id(self, user_id: str) -> dict | None:
+        key = f"user_by_id:{user_id}"
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached
         rows = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
         if not rows:
             return None
-        return codecs.decode_row("odoo_users", rows[0])
+        decoded = codecs.decode_row("odoo_users", rows[0])
+        self._cache.set(key, decoded)
+        return decoded
 
     def create_user(self, row: dict) -> dict:
         email = row.get("email", "").lower()
@@ -574,6 +605,7 @@ class BigQueryConfigStore:
         ]
         self._query(sql.SQL_UPDATE_USER_PASSWORD(), params)
         self._cache.delete("users"); self._cache.delete("users_count")
+        self._cache.invalidate_user(user_id, existing[0].get("email"))
         user = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
         return codecs.decode_row("odoo_users", user[0])
 
@@ -589,6 +621,7 @@ class BigQueryConfigStore:
         ]
         self._query(sql.SQL_UPDATE_USER(), params)
         self._cache.delete("users"); self._cache.delete("users_count")
+        self._cache.invalidate_user(user_id, existing[0].get("email"))
         user = self._query(sql.SQL_GET_USER_BY_ID(), [_string_param("id", user_id)])
         return codecs.decode_row("odoo_users", user[0])
 
@@ -602,7 +635,8 @@ class BigQueryConfigStore:
         return count
 
     def delete_user(self, user_id: str) -> None:
-        if self.get_user_by_id(user_id) is None:
+        existing = self.get_user_by_id(user_id)
+        if existing is None:
             raise NotFoundError(f"User {user_id} not found")
         # Cascade: remove all user permissions first to avoid orphan rows
         self._query(sql.SQL_DELETE_USER_PERMISSIONS(), [_string_param("user_id", user_id)])
@@ -610,6 +644,7 @@ class BigQueryConfigStore:
         self._cache.delete("users")
         self._cache.delete("users_count")
         self._cache.delete(f"user_permissions:{user_id}")
+        self._cache.invalidate_user(user_id, existing.get("email"))
 
     # ------------------------------------------------------------------
     # permissions

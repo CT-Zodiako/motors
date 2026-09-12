@@ -4,7 +4,8 @@
   NOTE: CONFIG_CACHE_TTL_SECONDS is resolved at import time; changing the env
   after the module is loaded has no effect on the default Cache().
 - Cached: list_categories, list_queries (incl. app-side category resolution),
-  list_schedules, list_destinations, list_runs(schedule_id) per schedule.
+  list_schedules, list_destinations, list_runs(schedule_id) per schedule,
+  get_user_by_email/get_user_by_id (per-user, keyed by email/id).
 - Point lookups derive from cached lists.
 - Invalidation matrix per write type (write-through after successful mutation).
 """
@@ -82,3 +83,8 @@ class Cache:
         for key in list(self._store.keys()):
             if key.startswith("user_permissions:"):
                 self.delete(key)
+
+    def invalidate_user(self, user_id: str, email: str | None = None) -> None:
+        self.delete(f"user_by_id:{user_id}")
+        if email:
+            self.delete(f"user_by_email:{email.lower()}")

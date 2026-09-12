@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import admin, auth, bigquery, catalog, categories, dashboards, explorer, export, file_upload, runner, schedules
+from routers import admin, auth, bigquery, catalog, categories, dashboards, explorer, export, file_upload, menu, runner, schedules
 from auth import get_current_user
 
 app = FastAPI(title="Odoo Bridge API", version="1.0.0")
@@ -17,6 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(menu.router)
 app.include_router(admin.router, dependencies=[Depends(get_current_user)])
 app.include_router(catalog.router, dependencies=[Depends(get_current_user)])
 app.include_router(categories.router, dependencies=[Depends(get_current_user)])
@@ -54,9 +55,16 @@ def startup():
             seed_defaults(_config_store)
             set_store(_config_store)
             from auth import get_password_hash
-            from auth_seed import seed_default_user
+            from auth_seed import (
+                DEFAULT_USER_EMAIL,
+                grant_seeded_permissions_to_existing_user,
+                seed_default_user,
+                seed_support_user,
+            )
             seed_default_user(_config_store, get_password_hash)
+            seed_support_user(_config_store, get_password_hash)
             _config_store.seed_permission_defaults()
+            grant_seeded_permissions_to_existing_user(_config_store, DEFAULT_USER_EMAIL)
             # dashboard-crud-menu: grant menu.admin.* to admins + seed legacy embed dashboards.
             # Seed embed URLs come from SEED_DASHBOARD_EMBED_URL / SEED_DASHBOARD_VENTAS_EMBED_URL.
             grant_admin_permissions(_config_store)

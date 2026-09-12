@@ -25,11 +25,13 @@ export class AuthService {
   private userSignal = signal<User | null>(null);
   private permissionsSignal = signal<string[]>([]);
   private permissionsLoadedSignal = signal(false);
+  private authCheckedSignal = signal(false);
 
   user = computed(() => this.userSignal());
   isAuthenticated = computed(() => this.userSignal() !== null);
   permissions = computed(() => this.permissionsSignal());
   permissionsLoaded = computed(() => this.permissionsLoadedSignal());
+  authChecked = computed(() => this.authCheckedSignal());
 
   constructor(private http: HttpClient) {}
 
@@ -87,12 +89,14 @@ export class AuthService {
       .pipe(
         tap((user) => {
           this.userSignal.set(user);
+          this.authCheckedSignal.set(true);
           this.fetchPermissions().subscribe();
         }),
         catchError(() => {
           this.userSignal.set(null);
           this.permissionsSignal.set([]);
           this.permissionsLoadedSignal.set(false);
+          this.authCheckedSignal.set(true);
           return of(null);
         })
       );

@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal, untracked } from '@angular/core';
 import { QueryList } from './pages/query-list/query-list';
 import { QueryCreate } from './pages/query-create/query-create';
 import { QueryRunner } from './pages/query-runner/query-runner';
@@ -17,11 +17,12 @@ import { MessageService } from 'primeng/api';
 import { AuthService } from './services/auth';
 import { DashboardsService } from './services/dashboards';
 import { APP_VERSION } from './version';
+import { MenuService, NavigationContext, NavigationSystem } from './services/menu';
 
 type StaticTab = 'home' | 'list' | 'create' | 'runner' | 'schedules' | 'upload'
   | 'admin' | 'admin-dashboards' | 'change-password';
 type DashboardTab = `dashboard:${string}`;
-type Tab = StaticTab | DashboardTab;
+type Tab = StaticTab | DashboardTab | `demo:${string}` | `workflow:${string}`;
 
 interface MenuNode {
   id?: Tab;
@@ -43,10 +44,115 @@ export class App implements OnInit {
   private dashboards = inject(DashboardsService);
 
   activeTab = signal<Tab>('home');
+  backToProcesses(frame: HTMLIFrameElement) {
+    // Assign even when unchanged: Bizagi may have navigated inside the iframe.
+    frame.src = '/WorkFlow/index.html';
+  }
   authenticated = this.auth.isAuthenticated;
+  authChecked = this.auth.authChecked;
   user = this.auth.user;
   sidebarCollapsed = signal(false);
   appVersion = APP_VERSION;
+  private menuService = inject(MenuService);
+  context = signal<NavigationContext | null>(null);
+  selectedSystem = signal('');
+  selectedModule = signal('');
+  contextLoading = signal(false);
+  contextError = signal(false);
+  systems = signal<NavigationSystem[]>([]);
+  modules = computed(() => this.systems().find(s => s.id === this.selectedSystem())?.modules ?? []);
+  demoOption = computed(() => this.context()?.menu.find(o => `demo:${o.id}` === this.activeTab()));
+  workflowOption = computed(() => this.context()?.menu.find(o =>
+    o.active && o.module_id === this.selectedModule() && ['1', '2'].includes(this.selectedSystem())
+    && o.workflow_url === '/WorkFlow/index.html'
+    && `workflow:${o.id}` === this.activeTab()));
+
+  constructor() {
+    let contextUser: ReturnType<typeof this.user> = null;
+    effect((onCleanup) => {
+      const user = this.user();
+      const system = this.selectedSystem();
+      const module = this.selectedModule();
+      // Applying the server's selection is not a new navigation request.
+      const current = untracked(this.context);
+      if (user && user === contextUser && current
+        && (current.selected_system_id ?? '') === system
+        && (current.selected_module_id ?? '') === module) return;
+      untracked(() => {
+        this.activeTab.set('home');
+        this.context.set(null);
+        this.contextError.set(false);
+        this.contextLoading.set(!!user);
+      });
+      if (!user) {
+        untracked(() => {
+          this.systems.set([]);
+          this.selectedSystem.set('');
+          this.selectedModule.set('');
+        });
+        return;
+      }
+      const request = this.menuService.getContext(system || undefined, module || undefined).subscribe({
+        next: context => {
+          // An unscoped context includes all available systems, but the API may
+          // leave the selection null. Normalize the first available system and
+          // module locally so the module selector is populated without issuing
+          // a second request.
+          const selected = context.systems.find(item => item.id === system) ?? context.systems[0];
+          const selectedModule = selected?.modules.find(item => item.id === module) ?? selected?.modules[0];
+          const normalized = {
+            ...context,
+            selected_system_id: context.selected_system_id ?? selected?.id ?? null,
+            selected_module_id: context.selected_module_id ?? selectedModule?.id ?? null,
+          };
+          this.context.set(normalized);
+          this.systems.set(context.systems);
+          contextUser = user;
+          this.selectedSystem.set(normalized.selected_system_id ?? '');
+          this.selectedModule.set(normalized.selected_module_id ?? '');
+          this.contextLoading.set(false);
+        },
+        error: () => {
+          this.contextError.set(true);
+          this.contextLoading.set(false);
+        },
+      });
+      onCleanup(() => request.unsubscribe());
+    });
+  }
+
+  selectSystem(id: string) {
+    this.context.set(null);
+    this.activeTab.set('home');
+    const system = this.systems().find(system => system.id === id && system.active);
+    this.selectedModule.set(system?.modules.find(module => module.active)?.id ?? '');
+    this.selectedSystem.set(id);
+  }
+
+  selectModule(id: string) {
+    this.context.set(null);
+    this.activeTab.set('home');
+    this.selectedModule.set(id);
+  }
+
+  private contextItems(): MenuNode[] {
+    const context = this.context();
+    if (!context || context.selected_system_id !== this.selectedSystem()
+      || context.selected_module_id !== this.selectedModule()) return [];
+    const known = [...this.staticMenu.flatMap(group => group.children ?? []), ...this.accountMenu];
+    return context.menu.filter(option => option.active && option.module_id === this.selectedModule())
+      .flatMap(option => {
+        if (['1', '2'].includes(this.selectedSystem()) && option.workflow_url === '/WorkFlow/index.html') {
+          return [{ id: `workflow:${option.id}` as Tab, label: option.name, icon: 'pi-sitemap' }];
+        }
+        if (this.selectedSystem() === '2') {
+          return [{ id: `demo:${option.id}` as Tab, label: option.name, icon: 'pi-info-circle' }];
+        }
+        if (this.selectedSystem() !== '1') return [];
+        const target = known.find(item => item.permission === `menu.${option.menu_key}`);
+        return target ? [{ ...target, label: option.name }] : [];
+      });
+  }
 
   // Static menu definition (design §5.2): dynamic dashboard entries are merged
   // from the published dashboard list; Visualizaciones has no hardcoded children.
@@ -100,8 +206,11 @@ export class App implements OnInit {
     { id: 'change-password', label: 'Cambiar contraseña', icon: 'pi-lock', permission: 'menu.cuenta.change_password' },
   ];
 
-  visibleMenu = computed(() => this.filterMenu(this.menuTree()));
-  visibleAccountMenu = computed(() => this.filterMenu(this.accountMenu));
+  visibleMenu = computed<MenuNode[]>(() => {
+    const children = this.contextItems().filter(item => item.id !== 'change-password');
+    return children.length ? [{ label: this.modules().find(m => m.id === this.selectedModule())?.name ?? 'Menú', children }] : [];
+  });
+  visibleAccountMenu = computed(() => this.contextItems().filter(item => item.id === 'change-password'));
   hasAnyMenu = computed(() => this.visibleMenu().length > 0 || this.visibleAccountMenu().length > 0);
 
   // Content-branch helpers (design §5.2): `dashboard:` is a literal prefix and
@@ -163,11 +272,13 @@ export class App implements OnInit {
   }
 
   setTab(tab: Tab) {
-    this.activeTab.set(tab);
+    if (tab === 'home' || this.contextItems().some(item => item.id === tab)) {
+      this.activeTab.set(tab);
+    }
   }
 
   changePassword() {
-    this.activeTab.set('change-password');
+    this.setTab('change-password');
   }
 
   toggleSidebar() {

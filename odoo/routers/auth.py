@@ -74,6 +74,14 @@ def me(user: dict = Depends(get_current_user)) -> dict:
     return {k: user[k] for k in ("id", "email", "role")}
 
 
+@router.get("/context")
+def context(system_id: str | None = None, module_id: str | None = None,
+            user: dict = Depends(get_current_user)) -> dict:
+    from routers.menu import navigation_context
+
+    return navigation_context(user, system_id, module_id)
+
+
 @router.get("/permissions")
 def permissions(user: dict = Depends(get_current_user)) -> dict:
     return {"permissions": sorted(get_user_permissions(user["id"]))}
