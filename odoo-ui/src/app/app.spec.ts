@@ -23,14 +23,18 @@ function context(system: string | null = '1', module: string | null = '1-a'): Na
 describe('App authoritative menu context', () => {
   const user = signal<object | null>(null);
   let http: HttpTestingController;
+  const hasPermission = vi.fn();
+  const authenticated = signal(true);
 
   beforeEach(() => {
     user.set({ id: '1' });
+    authenticated.set(true);
+    hasPermission.mockReset();
     TestBed.configureTestingModule({
       imports: [App],
       providers: [provideHttpClient(), provideHttpClientTesting(), MessageService,
         { provide: AuthService, useValue: {
-          user, isAuthenticated: signal(true), authChecked: signal(true), fetchMe: () => of(user()),
+          user, isAuthenticated: authenticated, authChecked: signal(true), hasPermission, fetchMe: () => of(user()),
         } },
       ],
     });
@@ -43,6 +47,39 @@ describe('App authoritative menu context', () => {
     fixture.detectChanges();
     return fixture;
   }
+
+  it.each([
+    { permitted: true, signedIn: true, expected: 'create' },
+    { permitted: false, signedIn: true, expected: 'list' },
+    { permitted: true, signedIn: false, expected: 'list' },
+  ])('guards list-originated editing: %j', ({ permitted, signedIn, expected }) => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush(context());
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    hasPermission.mockImplementation(permission => permitted && permission === 'menu.cargar.create');
+    authenticated.set(signedIn);
+    app.activeTab.set('list');
+    app.navigateFromQueryList('create');
+    expect(app.activeTab()).toBe(expected);
+    http.verify();
+  });
+
+  it('does not extend the edit exception to ordinary navigation or other list targets', () => {
+    const fixture = start();
+    http.expectOne(req => req.url.endsWith('/auth/context')).flush(context());
+    fixture.detectChanges();
+    const app = fixture.componentInstance;
+    hasPermission.mockReturnValue(true);
+    app.activeTab.set('list');
+    app.setTab('create');
+    expect(app.activeTab()).toBe('list');
+    app.navigateFromQueryList('upload');
+    expect(app.activeTab()).toBe('list');
+    app.navigateFromQueryList('home');
+    expect(app.activeTab()).toBe('home');
+    http.verify();
+  });
 
   it('loads once and accepts the server selection rather than the first available IDs', () => {
     const fixture = start();

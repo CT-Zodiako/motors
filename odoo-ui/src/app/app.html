@@ -164,7 +164,7 @@
         </section>
       }
       @if (activeTab() === 'home')     { <app-welcome /> }
-      @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="setTab.bind(this)" /> }
+      @if (activeTab() === 'list')     { <app-query-list [onNavigateToTab]="navigateFromQueryList.bind(this)" /> }
       @if (activeTab() === 'create')   { <app-query-create [onNavigateToTab]="setTab.bind(this)" /> }
       @if (activeTab() === 'runner')   { <app-query-runner /> }
 

@@ -271,6 +271,17 @@ export class App implements OnInit {
       .filter((item): item is MenuNode => item !== null);
   }
 
+  navigateFromQueryList(tab: Tab) {
+    if (tab === 'create') {
+      // Editing uses the create form even when it is outside the current menu.
+      if (this.authenticated() && this.auth.hasPermission('menu.cargar.create')) {
+        this.activeTab.set(tab);
+      }
+      return;
+    }
+    this.setTab(tab);
+  }
+
   setTab(tab: Tab) {
     if (tab === 'home' || this.contextItems().some(item => item.id === tab)) {
       this.activeTab.set(tab);
