@@ -87,6 +87,40 @@ describe('QueryCreate (editable-queries edit mode)', () => {
     expect(component.filters()[0]).toEqual({ field: 'name', operator: 'ilike', value: 'Acme' });
   });
 
+  it('opens a blank Create after leaving an unsaved edit', () => {
+    fixture.destroy();
+    editState.beginEdit(mockQuery);
+    fixture = TestBed.createComponent(QueryCreate);
+    fixture.detectChanges();
+    component = fixture.componentInstance;
+    http.expectOne((r) => r.url.includes('/explore/models')).flush({ total: 0, models: [] });
+    http.expectOne('http://localhost:8000/categories/').flush(CATEGORIES);
+    http.expectOne((r) => r.url.includes('/explore/fields/sale.order')).flush({
+      fields: { name: { string: 'Name', type: 'char' }, amount: { string: 'Amount', type: 'float' } },
+    });
+    expect(component.isEditMode()).toBe(true);
+    expect(component.queryName()).toBe('sales');
+    expect(editState.state().query).toEqual(mockQuery);
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(QueryCreate);
+    fixture.detectChanges();
+    component = fixture.componentInstance;
+    http.expectOne((r) => r.url.includes('/explore/models')).flush({ total: 0, models: [] });
+    http.expectOne('http://localhost:8000/categories/').flush(CATEGORIES);
+
+    expect(component.isEditMode()).toBe(false);
+    expect(editState.state().query).toBeNull();
+    expect(component.editingQuery()).toBeNull();
+    expect(component.queryName()).toBe('');
+    expect(component.selectedModel()).toBeNull();
+    expect(component.checkedFields().size).toBe(0);
+    expect(component.buildDomain()).toEqual([]);
+    expect(component.activeStep()).toBe(0);
+    http.expectNone((r) => r.url.includes('/explore/fields/'));
+    http.verify();
+  });
+
   it('edit mode treats stored limit_val 0 as blank (all records)', () => {
     const noLimitQuery = { ...mockQuery, limit_val: 0 };
     editState.beginEdit(noLimitQuery);

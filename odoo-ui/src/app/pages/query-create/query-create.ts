@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, Input } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OdooQueriesService, FieldMeta, OdooQuery } from '../../services/odoo-queries';
@@ -142,7 +142,7 @@ const FILTER_GUIDE_SECTIONS: FilterGuideSection[] = [
   templateUrl: './query-create.html',
   styleUrl: './query-create.css',
 })
-export class QueryCreate implements OnInit {
+export class QueryCreate implements OnInit, OnDestroy {
   private svc = inject(OdooQueriesService);
   private categoriesSvc = inject(CategoriesService);
   private msg = inject(MessageService);
@@ -309,6 +309,10 @@ export class QueryCreate implements OnInit {
       },
       error: () => {},
     });
+  }
+
+  ngOnDestroy() {
+    this.editState.clear();
   }
 
   private loadQueryForEdit(q: OdooQuery) {
